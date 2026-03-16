@@ -66,11 +66,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <title>CAMS Login - World Deaf Sports Championship</title>
     <!-- Bootstrap CSS for responsive and clean design -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome for icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
+        :root {
+            --primary-blue: #004a99;
+            --secondary-blue: #e6f0ff;
+            --accent-blue: #007bff;
+        }
+
         body { 
-            background-color: #f0f8ff; /* Alice Blue - Light blue theme */
+            background-color: #f8f9fa;
             height: 100vh;
             display: flex;
             align-items: center;
@@ -80,12 +85,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .login-card {
             border: none;
             border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0, 86, 179, 0.15); /* Blue-tinted shadow */
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
             overflow: hidden;
             background-color: #ffffff; /* White card */
         }
         .login-header {
-            background-color: #0d6efd; /* Primary Bootstrap Blue */
+            background-color: var(--primary-blue);
             color: #ffffff;
             padding: 30px 20px;
             text-align: center;
@@ -104,24 +109,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             padding: 40px 30px;
         }
         .btn-primary {
-            background-color: #0d6efd;
-            border-color: #0d6efd;
+            background-color: var(--primary-blue);
+            border: none;
             font-weight: 600;
             padding: 10px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
         .btn-primary:hover {
-            background-color: #0b5ed7;
-            border-color: #0a58ca;
+            background-color: #003366;
         }
         .form-floating:focus-within label {
-            color: #0d6efd;
+            color: var(--primary-blue);
         }
         .input-group-text {
             background-color: transparent;
             border-right: none;
-            color: #0d6efd;
+            color: var(--primary-blue);
         }
         .form-control {
             border-left: none;
@@ -136,8 +140,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             transition: all 0.3s ease;
         }
         .input-wrapper:focus-within {
-            border-color: #0d6efd;
-            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 0 0.25rem rgba(0, 74, 153, 0.25);
         }
     </style>
 </head>
@@ -148,21 +152,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <div class="col-md-6 col-lg-5 col-xl-4">
             <div class="card login-card">
                 <div class="login-header">
-                    <h2><i class="fas fa-trophy me-2"></i> CAMS</h2>
+                    <h2><i class="bi bi-trophy me-2"></i> CAMS</h2>
                     <p>Championship Accommodation Management System</p>
                 </div>
                 <div class="login-body">
                     
                     <?php if(!empty($error)): ?>
                         <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            <i class="fas fa-exclamation-circle me-1"></i> <?php echo htmlspecialchars($error); ?>
+                            <i class="bi bi-exclamation-circle me-1"></i> <?php echo htmlspecialchars($error); ?>
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     <?php endif; ?>
                     
                     <?php if(!empty($db_error)): ?>
                         <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                            <i class="fas fa-database me-1"></i> <?php echo htmlspecialchars($db_error); ?>
+                            <i class="bi bi-database me-1"></i> <?php echo htmlspecialchars($db_error); ?>
                         </div>
                     <?php endif; ?>
 
@@ -171,7 +175,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div class="mb-4">
                             <label class="form-label text-muted fw-bold small">Username / Delegation ID</label>
                             <div class="input-group input-wrapper">
-                                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                <span class="input-group-text"><i class="bi bi-person"></i></span>
                                 <input type="text" class="form-control" name="username" placeholder="Enter your username" required>
                             </div>
                         </div>
@@ -180,7 +184,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div class="mb-4">
                             <label class="form-label text-muted fw-bold small">Password</label>
                             <div class="input-group input-wrapper">
-                                <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                                <span class="input-group-text"><i class="bi bi-lock"></i></span>
                                 <input type="password" class="form-control" name="password" placeholder="Enter your password" required>
                             </div>
                         </div>
@@ -188,7 +192,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <!-- Submit Button -->
                         <div class="d-grid gap-2 mt-4">
                             <button type="submit" class="btn btn-primary btn-lg">
-                                Secure Login <i class="fas fa-sign-in-alt ms-1"></i>
+                                Secure Login <i class="bi bi-box-arrow-in-right ms-1"></i>
                             </button>
                         </div>
                     </form>
