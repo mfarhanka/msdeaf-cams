@@ -47,10 +47,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     } elseif ($_POST['action'] === 'add_hotel') {
         $name = trim($_POST['name']);
         $address = trim($_POST['address']);
-        $total_rooms = $_POST['total_rooms'];
         
-        $stmt = $pdo->prepare("INSERT INTO hotels (name, address, total_rooms) VALUES (?, ?, ?)");
-        if ($stmt->execute([$name, $address, $total_rooms])) {
+        // total_rooms is no longer manually entered, set a default of 0 since we calculate dynamically
+        $stmt = $pdo->prepare("INSERT INTO hotels (name, address, total_rooms) VALUES (?, ?, 0)");
+        if ($stmt->execute([$name, $address])) {
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-hotel'></i> Hotel added successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
     } elseif ($_POST['action'] === 'delete_hotel') {
@@ -68,12 +68,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         $stmt = $pdo->prepare("INSERT INTO room_types (hotel_id, name, capacity, price_per_night, total_allotment) VALUES (?, ?, ?, ?, ?)");
         if ($stmt->execute([$hotel_id, $name, $capacity, $price_per_night, $total_allotment])) {
+            // Update actual hotel total_rooms column
+            $pdo->prepare("UPDATE hotels SET total_rooms = (SELECT COALESCE(SUM(total_allotment), 0) FROM room_types WHERE hotel_id = ?) WHERE id = ?")->execute([$hotel_id, $hotel_id]);
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-bed'></i> Room Type added!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
     } elseif ($_POST['action'] === 'delete_room_type') {
         $id = $_POST['id'];
+        // get hotel_id before deleting
+        $h_stmt = $pdo->prepare("SELECT hotel_id FROM room_types WHERE id=?");
+        $h_stmt->execute([$id]);
+        $hotel_id = $h_stmt->fetchColumn();
+
         $stmt = $pdo->prepare("DELETE FROM room_types WHERE id=?");
         if ($stmt->execute([$id])) {
+            // Update actual hotel total_rooms column
+            $pdo->prepare("UPDATE hotels SET total_rooms = (SELECT COALESCE(SUM(total_allotment), 0) FROM room_types WHERE hotel_id = ?) WHERE id = ?")->execute([$hotel_id, $hotel_id]);
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-trash'></i> Room type deleted!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
     }
@@ -87,8 +96,14 @@ $hotel_count = $pdo->query("SELECT COUNT(*) FROM hotels")->fetchColumn();
 $champs_stmt = $pdo->query("SELECT * FROM championships ORDER BY start_date DESC");
 $championships = $champs_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch all hotels
-$hotels_stmt = $pdo->query("SELECT * FROM hotels ORDER BY id DESC");
+// Fetch all hotels and dynamically calculate total rooms from room types
+$hotels_stmt = $pdo->query("
+    SELECT h.id, h.name, h.address, COALESCE(SUM(rt.total_allotment), 0) AS calculated_total_rooms 
+    FROM hotels h 
+    LEFT JOIN room_types rt ON h.id = rt.hotel_id 
+    GROUP BY h.id, h.name, h.address 
+    ORDER BY h.id DESC
+");
 $hotels = $hotels_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch all room types
@@ -104,15 +119,20 @@ $room_types = $room_types_stmt->fetchAll(PDO::FETCH_ASSOC);
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f0f8ff; font-family: 'Segoe UI', sans-serif; }
-        .navbar { background-color: #0d6efd; }
-        .navbar-brand, .nav-link { color: #fff !important; }
+        :root {
+            --primary-blue: #004a99;
+            --secondary-blue: #e6f0ff;
+            --accent-blue: #007bff;
+        }
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .navbar { background-color: var(--primary-blue); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .navbar-brand, .nav-link { color: white !important; }
         .nav-link:hover { color: #e9ecef !important; }
-        .card-header { background-color: #0d6efd; color: #fff; }
+        .card-header { background-color: var(--primary-blue); color: #fff; }
         .card { border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .sidebar { background-color: #fff; min-height: calc(100vh - 56px); box-shadow: 2px 0 5px rgba(0,0,0,0.05); padding: 20px 0; }
+        .sidebar { background-color: white; border-right: 1px solid #dee2e6; min-height: calc(100vh - 56px); box-shadow: 2px 0 5px rgba(0,0,0,0.05); padding: 20px 0; }
         .sidebar .nav-link { color: #333 !important; padding: 10px 20px; border-radius: 0; }
-        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: #f0f8ff; color: #0d6efd !important; font-weight: bold; border-right: 4px solid #0d6efd; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: var(--secondary-blue); color: var(--primary-blue) !important; font-weight: bold; border-right: 4px solid var(--primary-blue); }
     </style>
 </head>
 <body>
@@ -305,7 +325,7 @@ $room_types = $room_types_stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <td><?php echo htmlspecialchars($h['id']); ?></td>
                                     <td class="fw-bold"><?php echo htmlspecialchars($h['name']); ?></td>
                                     <td><?php echo htmlspecialchars($h['address']); ?></td>
-                                    <td><?php echo htmlspecialchars($h['total_rooms']); ?></td>
+                                    <td><?php echo htmlspecialchars($h['calculated_total_rooms']); ?></td>
                                     <td>
                                         <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this hotel?');">
                                             <input type="hidden" name="action" value="delete_hotel">
@@ -435,11 +455,6 @@ $room_types = $room_types_stmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="mb-3">
                         <label class="form-label text-muted fw-bold">Complete Address</label>
                         <textarea name="address" class="form-control" rows="3" required></textarea>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label text-muted fw-bold">Total Rooms Available</label>
-                        <input type="number" name="total_rooms" class="form-control" min="1" required>
                     </div>
                 </div>
                 <div class="modal-footer">
