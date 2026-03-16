@@ -63,6 +63,10 @@ $room_types = $room_types_stmt->fetchAll(PDO::FETCH_ASSOC);
 require_once 'includes/header.php';
 ?>
 
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Hotels & Pricing Management</h1>
+</div>
+
 <!-- Hotels Management Section -->
 <div class="card mt-4" id="hotels">
     <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">

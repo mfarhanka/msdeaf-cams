@@ -1,4 +1,4 @@
-        </div> <!-- End Main Content -->
+        </main> <!-- End Main Content -->
     </div> <!-- End Row -->
 </div> <!-- End Container Fluid -->
 

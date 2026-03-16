@@ -47,9 +47,9 @@ require_once 'includes/header.php';
 ?>
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
-    <h2 class="h2 text-primary">Manage Championships</h2>
+    <h1 class="h2">Championship Management</h1>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addChampionshipModal">
-        <i class="fas fa-plus"></i> Add New
+        <i class="bi bi-plus-lg me-1"></i> Add Championship
     </button>
 </div>
 

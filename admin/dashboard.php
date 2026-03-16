@@ -8,7 +8,9 @@ $hotel_count = $pdo->query("SELECT COUNT(*) FROM hotels")->fetchColumn();
 require_once 'includes/header.php';
 ?>
 
-<h2 class="mb-4 text-primary">System Administrator Overview</h2>
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">System Administrator Overview</h1>
+</div>
 
 <div class="row">
     <!-- Stat Cards -->
