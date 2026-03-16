@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAMS - Championship Accommodation Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-blue: #004a99;
+            --secondary-blue: #e6f0ff;
+            --accent-blue: #007bff;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar {
+            background-color: var(--primary-blue);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .navbar-brand, .nav-link {
+            color: white !important;
+        }
+
+        .sidebar {
+            background-color: white;
+            min-height: calc(100vh - 56px);
+            border-right: 1px solid #dee2e6;
+        }
+
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            background-color: white;
+            border-bottom: 1px solid var(--secondary-blue);
+            font-weight: bold;
+            color: var(--primary-blue);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-blue);
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background-color: #003366;
+        }
+
+        .badge-status {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+
+        .hotel-price {
+            font-size: 1.25rem;
+            color: var(--primary-blue);
+            font-weight: bold;
+        }
+
+        .view-section {
+            display: none;
+        }
+
+        .view-section.active {
+            display: block;
+        }
+
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-blue);
+        }
+
+        .athlete-row:hover {
+            background-color: var(--secondary-blue);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#"><i class="bi bi-building-check me-2"></i>CAMS | World Deaf Sports</a>
+            <div class="d-flex align-items-center">
+                <select id="roleSwitcher" class="form-select form-select-sm me-3" onchange="switchRole(this.value)">
+                    <option value="admin">Role: System Admin</option>
+                    <option value="manager">Role: Country Manager (USA)</option>
+                </select>
+                <span class="text-white small"><i class="bi bi-person-circle me-1"></i> Welcome, User</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-2 d-none d-md-block sidebar py-3">
+                <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+                    <!-- Admin Links -->
+                    <div class="admin-only">
+                        <h6 class="px-3 mb-2 text-muted small text-uppercase fw-bold">Management</h6>
+                        <button class="nav-link active w-100 text-start" onclick="showView('admin-championships')"><i class="bi bi-trophy me-2"></i>Championships</button>
+                        <button class="nav-link w-100 text-start" onclick="showView('admin-hotels')"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</button>
+                        <button class="nav-link w-100 text-start" onclick="showView('admin-reports')"><i class="bi bi-bar-chart me-2"></i>Global Reports</button>
+                    </div>
+                    
+                    <!-- Country Manager Links -->
+                    <div class="manager-only d-none">
+                        <h6 class="px-3 mb-2 text-muted small text-uppercase fw-bold">Delegation</h6>
+                        <button class="nav-link active w-100 text-start" onclick="showView('manager-athletes')"><i class="bi bi-people me-2"></i>Athlete Roster</button>
+                        <button class="nav-link w-100 text-start" onclick="showView('manager-booking')"><i class="bi bi-calendar-check me-2"></i>Book Accommodation</button>
+                        <button class="nav-link w-100 text-start" onclick="showView('manager-invoice')"><i class="bi bi-receipt me-2"></i>Invoices</button>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-10 ms-sm-auto px-md-4 py-4">
+                
+                <!-- ADMIN: Championships View -->
+                <section id="admin-championships" class="view-section active">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Championship Management</h1>
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addChampionshipModal">
+                            <i class="bi bi-plus-lg me-1"></i> Add Championship
+                        </button>
+                    </div>
+
+                    <div class="row" id="championshipList">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">World Deaf Athletics 2024</h5>
+                                    <p class="text-muted small mb-2"><i class="bi bi-calendar3 me-2"></i>Oct 15 - Oct 22, 2024</p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="badge bg-success badge-status">Upcoming</span>
+                                        <div>
+                                            <button class="btn btn-outline-primary btn-sm me-1"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">World Deaf Tennis Championship</h5>
+                                    <p class="text-muted small mb-2"><i class="bi bi-calendar3 me-2"></i>Oct 15 - Oct 22, 2024</p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="badge bg-success badge-status">Upcoming</span>
+                                        <div>
+                                            <button class="btn btn-outline-primary btn-sm me-1"><i class="bi bi-pencil"></i></button>
+                                            <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- COUNTRY MANAGER: Athlete Roster -->
+                <section id="manager-athletes" class="view-section">
+                    <div class="d-flex justify-content-between align-items-center pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Team USA Roster</h1>
+                        <button class="btn btn-primary btn-sm">
+                            <i class="bi bi-person-plus me-1"></i> Add Athlete
+                        </button>
+                    </div>
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Gender</th>
+                                        <th>Sport</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="athlete-row">
+                                        <td>John Smith</td>
+                                        <td>Male</td>
+                                        <td>Athletics</td>
+                                        <td><span class="badge bg-warning text-dark">Unassigned</span></td>
+                                        <td><button class="btn btn-link btn-sm p-0">Edit</button></td>
+                                    </tr>
+                                    <tr class="athlete-row">
+                                        <td>Sarah Parker</td>
+                                        <td>Female</td>
+                                        <td>Athletics</td>
+                                        <td><span class="badge bg-success">Room 402</span></td>
+                                        <td><button class="btn btn-link btn-sm p-0">Edit</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- COUNTRY MANAGER: Booking View -->
+                <section id="manager-booking" class="view-section">
+                    <h1 class="h2 pb-2 mb-3 border-bottom">Book Accommodation</h1>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=400&q=80" class="card-img-top" alt="Hotel">
+                                <div class="card-body">
+                                    <h5 class="card-title">Grand Plaza Hotel</h5>
+                                    <p class="text-muted small">500m from Athletics Stadium</p>
+                                    <hr>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span class="text-muted small">From</span>
+                                            <div class="hotel-price">$120</div>
+                                        </div>
+                                        <button class="btn btn-primary">Select Rooms</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Placeholder for other views -->
+                <section id="admin-hotels" class="view-section text-center py-5">
+                    <i class="bi bi-tools display-1 text-muted"></i>
+                    <h3>Hotel Configuration</h3>
+                    <p>Interface to manage hotel room types, inventory, and championship pricing.</p>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal fade" id="addChampionshipModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">New Championship</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="mb-3">
+                            <label class="form-label">Title</label>
+                            <input type="text" class="form-control" placeholder="e.g. World Deaf Swimming">
+                        </div>
+                        <div class="row">
+                            <div class="col">
+                                <label class="form-label">Start Date</label>
+                                <input type="date" class="form-control">
+                            </div>
+                            <div class="col">
+                                <label class="form-label">End Date</label>
+                                <input type="date" class="form-control">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="alert('Championship Saved!')">Save Championship</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function switchRole(role) {
+            const adminLinks = document.querySelector('.admin-only');
+            const managerLinks = document.querySelector('.manager-only');
+            
+            if (role === 'admin') {
+                adminLinks.classList.remove('d-none');
+                managerLinks.classList.add('d-none');
+                showView('admin-championships');
+            } else {
+                adminLinks.classList.add('d-none');
+                managerLinks.classList.remove('d-none');
+                showView('manager-athletes');
+            }
+        }
+
+        function showView(viewId) {
+            // Remove active class from all sections
+            document.querySelectorAll('.view-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Add active class to target section
+            document.getElementById(viewId).classList.add('active');
+
+            // Update sidebar nav state
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if(link.getAttribute('onclick') && link.getAttribute('onclick').includes(viewId)) {
+                    link.classList.add('active');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
