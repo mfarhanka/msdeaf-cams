@@ -2,10 +2,10 @@
 session_start();
 // Check if user is logged in and is a country manager
 if (!isset($_SESSION['loggedin']) || $_SESSION['role'] !== 'country_manager') {
-    header("location: login.php");
+    header("location: ../login.php");
     exit;
 }
-require_once 'includes/db.php';
+require_once '../includes/db.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -34,7 +34,7 @@ require_once 'includes/db.php';
         <a class="navbar-brand fw-bold" href="#"><i class="fas fa-flag me-2"></i>CAMS Delegation</a>
         <div class="d-flex">
             <span class="navbar-text text-white me-3">Team Manager: <?php echo htmlspecialchars($_SESSION['username']); ?></span>
-            <a href="logout.php" class="btn btn-outline-light btn-sm">Logout <i class="fas fa-sign-out-alt"></i></a>
+            <a href="../logout.php" class="btn btn-outline-light btn-sm">Logout <i class="fas fa-sign-out-alt"></i></a>
         </div>
     </div>
 </nav>
@@ -44,7 +44,7 @@ require_once 'includes/db.php';
         <!-- Sidebar -->
         <div class="col-md-2 sidebar d-none d-md-block">
             <nav class="nav flex-column">
-                <a class="nav-link active" href="country_dashboard.php"><i class="fas fa-home me-2"></i> Dashboard</a>
+                <a class="nav-link active" href="dashboard.php"><i class="fas fa-home me-2"></i> Dashboard</a>
                 <a class="nav-link" href="#athletes"><i class="fas fa-users me-2"></i> My Athletes (Roster)</a>
                 <a class="nav-link" href="#book"><i class="fas fa-bed me-2"></i> Book Accommodation</a>
                 <a class="nav-link" href="#rooming"><i class="fas fa-list-ol me-2"></i> Room Assignments</a>

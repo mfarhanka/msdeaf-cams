@@ -40,9 +40,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 
                 // Redirect depending on role
                 if ($row['role'] === 'admin') {
-                    header("location: admin_dashboard.php");
+                    header("location: admin/dashboard.php");
                 } else {
-                    header("location: country_dashboard.php");
+                    header("location: country/dashboard.php");
                 }
                 exit;
             } else {

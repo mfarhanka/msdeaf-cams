@@ -2,10 +2,10 @@
 session_start();
 // Check if user is logged in and is an admin
 if (!isset($_SESSION['loggedin']) || $_SESSION['role'] !== 'admin') {
-    header("location: login.php");
+    header("location: ../login.php");
     exit;
 }
-require_once 'includes/db.php';
+require_once '../includes/db.php';
 
 $msg = '';
 
@@ -142,7 +142,7 @@ $room_types = $room_types_stmt->fetchAll(PDO::FETCH_ASSOC);
         <a class="navbar-brand fw-bold" href="#"><i class="fas fa-trophy me-2"></i>CAMS Admin</a>
         <div class="d-flex">
             <span class="navbar-text text-white me-3">Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?></span>
-            <a href="logout.php" class="btn btn-outline-light btn-sm">Logout <i class="fas fa-sign-out-alt"></i></a>
+            <a href="../logout.php" class="btn btn-outline-light btn-sm">Logout <i class="fas fa-sign-out-alt"></i></a>
         </div>
     </div>
 </nav>
@@ -152,7 +152,7 @@ $room_types = $room_types_stmt->fetchAll(PDO::FETCH_ASSOC);
         <!-- Sidebar -->
         <div class="col-md-2 sidebar d-none d-md-block">
             <nav class="nav flex-column">
-                <a class="nav-link active" href="admin_dashboard.php"><i class="fas fa-tachometer-alt me-2"></i> Dashboard</a>
+                <a class="nav-link active" href="dashboard.php"><i class="fas fa-tachometer-alt me-2"></i> Dashboard</a>
                 <a class="nav-link" href="#championships"><i class="fas fa-medal me-2"></i> Championships</a>
                 <a class="nav-link" href="#hotels"><i class="fas fa-hotel me-2"></i> Hotels & Pricing</a>
                 <a class="nav-link" href="#countries"><i class="fas fa-globe me-2"></i> Delegations Overview</a>
