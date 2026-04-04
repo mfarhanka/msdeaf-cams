@@ -4,6 +4,16 @@ require_once 'includes/auth.php';
 $countryId = $_SESSION['id'];
 $msg = '';
 
+function syncReservedRooms(PDO $pdo, int $bookingId): void
+{
+    $roomsReservedStmt = $pdo->prepare("SELECT COUNT(DISTINCT room_number) FROM room_assignments WHERE booking_id = ? AND room_number IS NOT NULL AND room_number <> ''");
+    $roomsReservedStmt->execute([$bookingId]);
+    $roomsReserved = intval($roomsReservedStmt->fetchColumn());
+
+    $updateBookingStmt = $pdo->prepare("UPDATE bookings SET rooms_reserved = ? WHERE id = ?");
+    $updateBookingStmt->execute([$roomsReserved, $bookingId]);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'assign_room') {
         $athleteId = intval($_POST['athlete_id'] ?? 0);
@@ -14,17 +24,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $athleteCheck = $pdo->prepare("SELECT id FROM athletes WHERE id = ? AND country_id = ?");
             $athleteCheck->execute([$athleteId, $countryId]);
             if ($athleteCheck->fetch()) {
-                $roomTypeCheck = $pdo->prepare("SELECT hotel_id, total_allotment FROM room_types WHERE id = ?");
+                $roomTypeCheck = $pdo->prepare("SELECT hotel_id, total_allotment, capacity FROM room_types WHERE id = ?");
                 $roomTypeCheck->execute([$roomTypeId]);
                 $roomTypeInfo = $roomTypeCheck->fetch(PDO::FETCH_ASSOC);
                 if ($roomTypeInfo) {
                     $assignedCountStmt = $pdo->prepare("SELECT COUNT(*) FROM room_assignments ra JOIN bookings bb ON ra.booking_id = bb.id WHERE bb.room_type_id = ? AND bb.status <> 'Cancelled'");
                     $assignedCountStmt->execute([$roomTypeId]);
-                    $assignedCount = intval($assignedCountStmt->fetchColumn());
-                    $availableRooms = intval($roomTypeInfo['total_allotment']) - $assignedCount;
+                    $assignedAthletes = intval($assignedCountStmt->fetchColumn());
+                    $capacity = max(1, intval($roomTypeInfo['capacity']));
+                    $totalRooms = intval($roomTypeInfo['total_allotment']);
+                    $availableSlots = ($totalRooms * $capacity) - $assignedAthletes;
 
-                    if ($availableRooms <= 0) {
-                        $msg = "<div class='alert alert-warning'>No available rooms left for the selected hotel room type.</div>";
+                    if ($availableSlots <= 0) {
+                        $msg = "<div class='alert alert-warning'>No available bed slots left for the selected hotel room type.</div>";
                     } else {
                         $bookingCheck = $pdo->prepare("SELECT b.id, b.rooms_reserved, COALESCE(COUNT(ra.id), 0) AS assigned_rooms
                             FROM bookings b
@@ -37,42 +49,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $bookingInfo = $bookingCheck->fetch(PDO::FETCH_ASSOC);
 
                         if ($bookingInfo) {
-                            if (intval($bookingInfo['assigned_rooms']) >= intval($bookingInfo['rooms_reserved'])) {
-                                $updateRooms = $pdo->prepare("UPDATE bookings SET rooms_reserved = rooms_reserved + 1 WHERE id = ?");
-                                $updateRooms->execute([$bookingInfo['id']]);
-                            }
                             $bookingId = $bookingInfo['id'];
                         } else {
-                            $insertBooking = $pdo->prepare("INSERT INTO bookings (championship_id, country_id, hotel_id, room_type_id, rooms_reserved, status) VALUES (?, ?, ?, ?, 1, 'Pending')");
+                            $insertBooking = $pdo->prepare("INSERT INTO bookings (championship_id, country_id, hotel_id, room_type_id, rooms_reserved, status) VALUES (?, ?, ?, ?, 0, 'Pending')");
                             $insertBooking->execute([$championshipId, $countryId, $roomTypeInfo['hotel_id'], $roomTypeId]);
                             $bookingId = $pdo->lastInsertId();
                         }
 
-                        $assignedStmt = $pdo->prepare("SELECT room_number FROM room_assignments WHERE booking_id = ?");
-                        $assignedStmt->execute([$bookingId]);
-                        $assignedRooms = $assignedStmt->fetchAll(PDO::FETCH_COLUMN);
+                        $existing = $pdo->prepare("SELECT id, booking_id, room_number FROM room_assignments WHERE athlete_id = ?");
+                        $existing->execute([$athleteId]);
+                        $existingAssignment = $existing->fetch(PDO::FETCH_ASSOC);
+                        $previousBookingId = $existingAssignment ? intval($existingAssignment['booking_id']) : 0;
 
                         $roomNumber = '';
-                        for ($i = 1; $i <= intval($roomTypeInfo['total_allotment']); $i++) {
+                        $occupancyStmt = $pdo->prepare("SELECT room_number, COUNT(*) AS occupants FROM room_assignments WHERE booking_id = ? GROUP BY room_number");
+                        $occupancyStmt->execute([$bookingId]);
+                        $occupancyRows = $occupancyStmt->fetchAll(PDO::FETCH_ASSOC);
+                        $roomOccupancy = [];
+                        foreach ($occupancyRows as $occupancyRow) {
+                            $roomOccupancy[$occupancyRow['room_number']] = intval($occupancyRow['occupants']);
+                        }
+
+                        if ($existingAssignment && $previousBookingId === intval($bookingId) && !empty($existingAssignment['room_number'])) {
+                            $currentOccupancy = $roomOccupancy[$existingAssignment['room_number']] ?? 0;
+                            if ($currentOccupancy > 0 && $currentOccupancy <= $capacity) {
+                                $roomNumber = $existingAssignment['room_number'];
+                            }
+                        }
+
+                        for ($i = 1; $i <= $totalRooms && empty($roomNumber); $i++) {
                             $candidate = 'Room ' . $i;
-                            if (!in_array($candidate, $assignedRooms, true)) {
+                            $occupants = $roomOccupancy[$candidate] ?? 0;
+                            if ($occupants < $capacity) {
                                 $roomNumber = $candidate;
                                 break;
                             }
                         }
 
                         if (empty($roomNumber)) {
-                            $msg = "<div class='alert alert-warning'>No available room numbers left for this room type.</div>";
+                            $msg = "<div class='alert alert-warning'>All rooms for this room type are full.</div>";
                         } else {
-                            $existing = $pdo->prepare("SELECT id FROM room_assignments WHERE athlete_id = ?");
-                            $existing->execute([$athleteId]);
-                            if ($existing->fetch()) {
+                            if ($existingAssignment) {
                                 $updateStmt = $pdo->prepare("UPDATE room_assignments SET booking_id = ?, room_number = ? WHERE athlete_id = ?");
                                 $updateStmt->execute([$bookingId, $roomNumber, $athleteId]);
                             } else {
                                 $insertStmt = $pdo->prepare("INSERT INTO room_assignments (booking_id, room_number, athlete_id) VALUES (?, ?, ?)");
                                 $insertStmt->execute([$bookingId, $roomNumber, $athleteId]);
                             }
+
+                            syncReservedRooms($pdo, intval($bookingId));
+                            if ($previousBookingId && $previousBookingId !== intval($bookingId)) {
+                                syncReservedRooms($pdo, $previousBookingId);
+                            }
+
                             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-check-circle'></i> Room assigned successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
                         }
                     }
@@ -93,8 +122,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $athleteCheck = $pdo->prepare("SELECT id FROM athletes WHERE id = ? AND country_id = ?");
             $athleteCheck->execute([$athleteId, $countryId]);
             if ($athleteCheck->fetch()) {
+                $bookingLookupStmt = $pdo->prepare("SELECT booking_id FROM room_assignments WHERE athlete_id = ?");
+                $bookingLookupStmt->execute([$athleteId]);
+                $bookingId = intval($bookingLookupStmt->fetchColumn() ?: 0);
+
                 $deleteStmt = $pdo->prepare("DELETE FROM room_assignments WHERE athlete_id = ?");
                 if ($deleteStmt->execute([$athleteId])) {
+                    if ($bookingId) {
+                        syncReservedRooms($pdo, $bookingId);
+                    }
                     $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-times-circle'></i> Room unassigned successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
                 } else {
                     $msg = "<div class='alert alert-danger'>Failed to unassign room.</div>";
@@ -135,11 +171,11 @@ $bookings = $bookingsStmt->fetchAll(PDO::FETCH_ASSOC);
 // Get championship list for room assignment selection.
 $championships = $pdo->query("SELECT * FROM championships ORDER BY start_date ASC")->fetchAll(PDO::FETCH_ASSOC);
  
-// Get admin-registered room types and availability based on assigned rooms.
+// Get admin-registered room types and availability based on athlete slots.
 $roomTypesStmt = $pdo->prepare("SELECT rt.*, h.name AS hotel_name,
     COALESCE((SELECT COUNT(*) FROM room_assignments ra
         JOIN bookings bb ON ra.booking_id = bb.id
-        WHERE bb.room_type_id = rt.id AND bb.status <> 'Cancelled'), 0) AS assigned_rooms
+        WHERE bb.room_type_id = rt.id AND bb.status <> 'Cancelled'), 0) AS assigned_athletes
     FROM room_types rt
     JOIN hotels h ON rt.hotel_id = h.id
     ORDER BY h.name ASC, rt.name ASC");
@@ -215,12 +251,17 @@ require_once 'includes/header.php';
                 <h5 class="card-title">Admin Room Types</h5>
                 <?php if (count($roomTypes) > 0): ?>
                     <?php foreach ($roomTypes as $rt): ?>
-                        <?php $available = intval($rt['total_allotment']) - intval($rt['assigned_rooms']); ?>
+                        <?php
+                            $totalSlots = intval($rt['total_allotment']) * max(1, intval($rt['capacity']));
+                            $availableSlots = $totalSlots - intval($rt['assigned_athletes']);
+                            $roomsInUse = intval(ceil(intval($rt['assigned_athletes']) / max(1, intval($rt['capacity']))));
+                            $roomsLeft = max(0, intval($rt['total_allotment']) - $roomsInUse);
+                        ?>
                         <div class="mb-3 p-3 border rounded">
                             <h6 class="mb-2"><?php echo htmlspecialchars($rt['hotel_name']); ?> - <?php echo htmlspecialchars($rt['name']); ?></h6>
                             <div class="text-muted small mb-2">Capacity: <?php echo htmlspecialchars($rt['capacity']); ?> person(s)</div>
                             <div class="d-flex justify-content-between align-items-center mt-2">
-                                <small><?php echo $available; ?> available</small>
+                                <small><?php echo $availableSlots; ?> slot(s) left, <?php echo $roomsLeft; ?> room(s) left</small>
                                 <small>$<?php echo number_format($rt['price_per_night'], 2); ?>/night</small>
                             </div>
                         </div>
@@ -263,16 +304,16 @@ require_once 'includes/header.php';
                         <select name="room_type_id" class="form-select" required>
                             <option value="">-- Choose Room Type --</option>
                             <?php foreach ($roomTypes as $rt): ?>
-                                <?php $available = intval($rt['total_allotment']) - intval($rt['assigned_rooms']); ?>
-                                <option value="<?php echo $rt['id']; ?>" <?php echo $available <= 0 ? 'disabled' : ''; ?> <?php echo $athlete['current_room_type_id'] === $rt['id'] ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($rt['hotel_name'] . ' / ' . $rt['name'] . ' (' . $rt['capacity'] . 'p) — ' . $available . ' available)'); ?>
+                                <?php $availableSlots = (intval($rt['total_allotment']) * max(1, intval($rt['capacity']))) - intval($rt['assigned_athletes']); ?>
+                                <option value="<?php echo $rt['id']; ?>" <?php echo $availableSlots <= 0 ? 'disabled' : ''; ?> <?php echo $athlete['current_room_type_id'] === $rt['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($rt['hotel_name'] . ' / ' . $rt['name'] . ' (' . $rt['capacity'] . 'p) - ' . $availableSlots . ' slot(s) available'); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
 
                     <div class="alert alert-info">
-                        Room numbers are assigned automatically based on availability.
+                        Room numbers are assigned automatically and athletes are grouped into the same room until the room capacity is full.
                     </div>
                 </div>
                 <div class="modal-footer">
