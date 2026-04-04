@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS athletes (
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     gender ENUM('M', 'F', 'Other') NOT NULL,
+    tshirt_size VARCHAR(10) NULL,
     sport_category VARCHAR(100) NOT NULL,
     passport_number VARCHAR(255) NOT NULL, -- In real app, this should be encrypted
     FOREIGN KEY (country_id) REFERENCES users(id) ON DELETE CASCADE

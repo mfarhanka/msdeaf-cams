@@ -2,6 +2,11 @@
 require_once 'includes/auth.php';
 
 $countryId = $_SESSION['id'];
+$tshirtColumnExistsStmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'athletes' AND COLUMN_NAME = 'tshirt_size'");
+$tshirtColumnExistsStmt->execute();
+if (!intval($tshirtColumnExistsStmt->fetchColumn())) {
+    $pdo->exec("ALTER TABLE athletes ADD COLUMN tshirt_size VARCHAR(10) NULL AFTER gender");
+}
 
 // Handle POST actions for athletes
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -110,6 +115,7 @@ require_once 'includes/header.php';
                     <tr>
                         <th>Name</th>
                         <th>Gender</th>
+                        <th>T-Shirt Size</th>
                         <th>Room Assignment</th>
                         <th>Actions</th>
                     </tr>
@@ -120,6 +126,13 @@ require_once 'includes/header.php';
                         <tr class="athlete-row">
                             <td><?php echo htmlspecialchars($athlete['first_name'] . ' ' . $athlete['last_name']); ?></td>
                             <td><?php echo htmlspecialchars($athlete['gender']); ?></td>
+                            <td>
+                                <?php if (!empty($athlete['tshirt_size'])): ?>
+                                    <span class="badge bg-primary-subtle text-primary border"><?php echo htmlspecialchars($athlete['tshirt_size']); ?></span>
+                                <?php else: ?>
+                                    <span class="text-muted">Not set</span>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <?php if ($athlete['room_assignment'] === 'Unassigned'): ?>
                                     <span class="badge bg-warning text-dark">Unassigned</span>
@@ -141,7 +154,7 @@ require_once 'includes/header.php';
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="4" class="text-center text-muted">No athletes registered yet. Click "Add Athlete" to get started.</td>
+                            <td colspan="5" class="text-center text-muted">No athletes registered yet. Click "Add Athlete" to get started.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
