@@ -1,5 +1,20 @@
 <?php
 require_once 'includes/auth.php';
+
+$countryId = $_SESSION['id'];
+
+$athleteStmt = $pdo->prepare("SELECT COUNT(*) FROM athletes WHERE country_id = ?");
+$athleteStmt->execute([$countryId]);
+$athleteCount = $athleteStmt->fetchColumn();
+
+$roomStmt = $pdo->prepare("SELECT COUNT(*) FROM bookings WHERE country_id = ?");
+$roomStmt->execute([$countryId]);
+$roomsBooked = $roomStmt->fetchColumn();
+
+$balanceStmt = $pdo->prepare("SELECT COALESCE(SUM(b.rooms_reserved * rt.price_per_night), 0) FROM bookings b JOIN room_types rt ON b.room_type_id = rt.id WHERE b.country_id = ? AND b.status <> 'Cancelled'");
+$balanceStmt->execute([$countryId]);
+$balanceDue = $balanceStmt->fetchColumn();
+
 require_once 'includes/header.php';
 ?>
 
@@ -13,7 +28,7 @@ require_once 'includes/header.php';
             <div class="card-body">
                 <h4><i class="bi bi-people-fill"></i></h4>
                 <h6 class="card-title mb-1">Registered Athletes</h6>
-                <p class="card-text fs-5 mb-0">24</p>
+                <p class="card-text fs-5 mb-0"><?php echo htmlspecialchars($athleteCount); ?></p>
             </div>
         </div>
     </div>
@@ -22,7 +37,7 @@ require_once 'includes/header.php';
             <div class="card-body text-primary">
                 <h4><i class="bi bi-hospital"></i></h4>
                 <h6 class="card-title mb-1">Rooms Booked</h6>
-                <p class="card-text fs-5 mb-0">12</p>
+                <p class="card-text fs-5 mb-0"><?php echo htmlspecialchars($roomsBooked); ?></p>
             </div>
         </div>
     </div>
@@ -31,7 +46,7 @@ require_once 'includes/header.php';
             <div class="card-body">
                 <h4><i class="bi bi-check-circle"></i></h4>
                 <h6 class="card-title mb-1">Balance Due</h6>
-                <p class="card-text fs-5 mb-0">$0.00</p>
+                <p class="card-text fs-5 mb-0">$<?php echo number_format($balanceDue, 2); ?></p>
             </div>
         </div>
     </div>
