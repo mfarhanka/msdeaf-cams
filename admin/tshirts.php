@@ -76,16 +76,23 @@ require_once 'includes/header.php';
             <span class="badge bg-warning text-dark px-3 py-2">Pending: <?php echo $pendingSizes; ?></span>
         </div>
 
-        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-xl-5 g-2">
-            <?php foreach ($sizeOptions as $sizeOption): ?>
-                <div class="col">
-                    <div class="border rounded p-3 h-100 bg-light">
-                        <div class="small text-muted mb-1">Size</div>
-                        <div class="fw-semibold"><?php echo htmlspecialchars($sizeOption); ?></div>
-                        <div class="fs-5 fw-bold text-primary"><?php echo $sizeTotals[$sizeOption]; ?></div>
-                    </div>
-                </div>
-            <?php endforeach; ?>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 180px;">Size</th>
+                        <th>Total Submitted</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($sizeOptions as $sizeOption): ?>
+                        <tr>
+                            <td class="fw-semibold"><?php echo htmlspecialchars($sizeOption); ?></td>
+                            <td><?php echo $sizeTotals[$sizeOption]; ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
