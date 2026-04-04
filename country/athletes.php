@@ -57,6 +57,18 @@ $athletesStmt = $pdo->prepare("
 $athletesStmt->execute([$countryId]);
 $athletes = $athletesStmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Calculate gender counts
+$maleCount = 0;
+$femaleCount = 0;
+
+foreach ($athletes as $athlete) {
+    if ($athlete['gender'] === 'M') {
+        $maleCount++;
+    } elseif ($athlete['gender'] === 'F') {
+        $femaleCount++;
+    }
+}
+
 require_once 'includes/header.php';
 ?>
 
@@ -65,6 +77,28 @@ require_once 'includes/header.php';
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAthleteModal">
         <i class="bi bi-person-plus me-1"></i> Add Athlete
     </button>
+</div>
+
+<!-- Gender Summary -->
+<div class="row row-cols-1 row-cols-sm-2 g-2 mb-4">
+    <div class="col">
+        <div class="card text-center text-white bg-primary">
+            <div class="card-body">
+                <h4><i class="bi bi-gender-male"></i></h4>
+                <h6 class="card-title mb-1">Male Athletes</h6>
+                <p class="card-text fs-5 mb-0"><?php echo $maleCount; ?></p>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center text-white bg-danger">
+            <div class="card-body">
+                <h4><i class="bi bi-gender-female"></i></h4>
+                <h6 class="card-title mb-1">Female Athletes</h6>
+                <p class="card-text fs-5 mb-0"><?php echo $femaleCount; ?></p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="card" id="athletes">
@@ -145,7 +179,6 @@ require_once 'includes/header.php';
                             <option value="">-- Select Gender --</option>
                             <option value="M">Male</option>
                             <option value="F">Female</option>
-                            <option value="Other">Other</option>
                         </select>
                     </div>
                 </div>
@@ -187,7 +220,6 @@ require_once 'includes/header.php';
                         <select name="gender" class="form-select" required>
                             <option value="M" <?php echo $athlete['gender'] === 'M' ? 'selected' : ''; ?>>Male</option>
                             <option value="F" <?php echo $athlete['gender'] === 'F' ? 'selected' : ''; ?>>Female</option>
-                            <option value="Other" <?php echo $athlete['gender'] === 'Other' ? 'selected' : ''; ?>>Other</option>
                         </select>
                     </div>
                 </div>
