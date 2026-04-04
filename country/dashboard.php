@@ -11,8 +11,9 @@ $roomStmt = $pdo->prepare("SELECT COUNT(*) FROM bookings WHERE country_id = ?");
 $roomStmt->execute([$countryId]);
 $roomsBooked = $roomStmt->fetchColumn();
 
-$balanceStmt = $pdo->prepare("SELECT COALESCE(SUM(assignment_totals.assigned_athletes * rt.price_per_night), 0)
+$balanceStmt = $pdo->prepare("SELECT COALESCE(SUM(assignment_totals.assigned_athletes * rt.price_per_night * (DATEDIFF(c.end_date, c.start_date) + 1)), 0)
     FROM bookings b
+    JOIN championships c ON b.championship_id = c.id
     JOIN room_types rt ON b.room_type_id = rt.id
     LEFT JOIN (
         SELECT booking_id, COUNT(*) AS assigned_athletes
@@ -53,7 +54,7 @@ require_once 'includes/header.php';
         <div class="card text-center text-white bg-success">
             <div class="card-body">
                 <h4><i class="bi bi-check-circle"></i></h4>
-                <h6 class="card-title mb-1">Daily Balance Due</h6>
+                <h6 class="card-title mb-1">Total Balance Due</h6>
                 <p class="card-text fs-5 mb-0">$<?php echo number_format($balanceDue, 2); ?></p>
             </div>
         </div>
