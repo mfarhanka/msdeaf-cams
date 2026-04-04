@@ -262,7 +262,7 @@ require_once 'includes/header.php';
                             <div class="text-muted small mb-2">Capacity: <?php echo htmlspecialchars($rt['capacity']); ?> person(s)</div>
                             <div class="d-flex justify-content-between align-items-center mt-2">
                                 <small><?php echo $availableSlots; ?> slot(s) left, <?php echo $roomsLeft; ?> room(s) left</small>
-                                <small>$<?php echo number_format($rt['price_per_night'], 2); ?>/night</small>
+                                <small>$<?php echo number_format($rt['price_per_night'], 2); ?>/pax/day</small>
                             </div>
                         </div>
                     <?php endforeach; ?>
