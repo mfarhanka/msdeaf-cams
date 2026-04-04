@@ -24,7 +24,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         .navbar {
             background-color: var(--primary-blue);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            padding: 0.5rem 1rem;
         }
 
         .navbar-brand, .nav-link {
@@ -35,13 +36,19 @@ $current_page = basename($_SERVER['PHP_SELF']);
             background-color: white;
             min-height: calc(100vh - 56px);
             border-right: 1px solid #dee2e6;
+            max-width: 220px;
+            padding-top: 0.75rem;
         }
 
         .card {
             border: none;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            margin-bottom: 12px;
+        }
+
+        .card-body {
+            padding: 0.9rem 1rem;
         }
 
         .card-header {
@@ -49,11 +56,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
             border-bottom: 1px solid var(--secondary-blue);
             font-weight: bold;
             color: var(--primary-blue);
+            padding: 0.75rem 1rem;
         }
 
         .btn-primary {
             background-color: var(--primary-blue);
             border: none;
+            padding: 0.55rem 1rem;
         }
 
         .btn-primary:hover {
@@ -74,7 +83,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         .nav-pills .nav-link {
             color: #333 !important;
-            padding: 10px 20px;
+            padding: 0.55rem 0.9rem;
+            font-size: 0.92rem;
         }
 
         .nav-pills .nav-link:hover {
@@ -85,6 +95,20 @@ $current_page = basename($_SERVER['PHP_SELF']);
         .nav-pills .nav-link.active {
             background-color: var(--primary-blue) !important;
             color: white !important;
+        }
+
+        .container-fluid {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+
+        main {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+
+        .border-bottom {
+            margin-bottom: 0.8rem;
         }
     </style>
 </head>

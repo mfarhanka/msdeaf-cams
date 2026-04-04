@@ -12,41 +12,41 @@ require_once 'includes/header.php';
     <h1 class="h2">System Administrator Overview</h1>
 </div>
 
-<div class="row">
+<div class="row row-cols-1 row-cols-sm-2 row-cols-md-4 g-2">
     <!-- Stat Cards -->
-    <div class="col-md-3">
+    <div class="col">
         <div class="card text-center text-white bg-primary">
             <div class="card-body">
-                <h3><i class="fas fa-medal"></i></h3>
-                <h5 class="card-title">Championships</h5>
-                <p class="card-text fs-4"><?php echo $champ_count; ?> Active</p>
+                <h4><i class="fas fa-medal"></i></h4>
+                <h6 class="card-title mb-1">Championships</h6>
+                <p class="card-text fs-5 mb-0"><?php echo $champ_count; ?> Active</p>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
         <div class="card text-center bg-white border-primary border">
             <div class="card-body text-primary">
-                <h3><i class="fas fa-hotel"></i></h3>
-                <h5 class="card-title">Hotels</h5>
-                <p class="card-text fs-4"><?php echo $hotel_count; ?> Listed</p>
+                <h4><i class="fas fa-hotel"></i></h4>
+                <h6 class="card-title mb-1">Hotels</h6>
+                <p class="card-text fs-5 mb-0"><?php echo $hotel_count; ?> Listed</p>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
         <div class="card text-center text-white bg-info">
             <div class="card-body">
-                <h3><i class="fas fa-users"></i></h3>
-                <h5 class="card-title">Total Athletes</h5>
-                <p class="card-text fs-4">0</p>
+                <h4><i class="fas fa-users"></i></h4>
+                <h6 class="card-title mb-1">Total Athletes</h6>
+                <p class="card-text fs-5 mb-0">0</p>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col">
         <div class="card text-center bg-white border-info border">
             <div class="card-body text-info">
-                <h3><i class="fas fa-file-invoice-dollar"></i></h3>
-                <h5 class="card-title">Total Bookings</h5>
-                <p class="card-text fs-4">0</p>
+                <h4><i class="fas fa-file-invoice-dollar"></i></h4>
+                <h6 class="card-title mb-1">Total Bookings</h6>
+                <p class="card-text fs-5 mb-0">0</p>
             </div>
         </div>
     </div>
