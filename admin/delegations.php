@@ -300,7 +300,7 @@ require_once 'includes/header.php';
                     <input type="hidden" name="action" value="edit_delegation">
                     <input type="hidden" name="id" value="<?php echo $d['id']; ?>">
                     <div class="mb-3">
-                        <label class="form-label text-muted fw-bold">Username</label>
+                        <label class="form-label text-muted fw-bold">Delegation Username</label>
                         <input type="text" name="username" class="form-control" value="<?php echo htmlspecialchars($d['username']); ?>" required>
                     </div>
                     <div class="mb-3">

@@ -117,7 +117,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <div class="container-fluid">
         <a class="navbar-brand" href="dashboard.php"><i class="bi bi-building-check me-2"></i>CAMS | World Deaf Sports</a>
         <div class="d-flex align-items-center">
-            <span class="text-white small me-3"><i class="bi bi-person-circle me-1"></i> Team Manager: <?php echo htmlspecialchars($_SESSION['username']); ?></span>
+            <span class="text-white small me-3"><i class="bi bi-person-circle me-1"></i> Delegation: <?php echo htmlspecialchars($_SESSION['username']); ?></span>
             <a href="../logout.php" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </div>
     </div>
