@@ -132,6 +132,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <h6 class="px-3 mb-2 text-muted small text-uppercase fw-bold">Delegation</h6>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'athletes.php' ? 'active' : ''; ?>" href="athletes.php"><i class="bi bi-people me-2"></i>Athlete Roster</a>
+                    <a class="nav-link w-100 text-start <?php echo $current_page == 'passport.php' ? 'active' : ''; ?>" href="passport.php"><i class="bi bi-passport me-2"></i>Passport Details</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'tshirt.php' ? 'active' : ''; ?>" href="tshirt.php"><i class="bi bi-tag me-2"></i>T-Shirt Sizes</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'book.php' ? 'active' : ''; ?>" href="book.php"><i class="bi bi-calendar-check me-2"></i>Book Accommodation</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'finance.php' ? 'active' : ''; ?>" href="finance.php"><i class="bi bi-receipt me-2"></i>Financial Summary</a>
