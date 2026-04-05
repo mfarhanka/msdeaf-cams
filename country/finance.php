@@ -24,7 +24,9 @@ $financeStmt = $pdo->prepare("SELECT
         FROM room_assignments
         GROUP BY booking_id
     ) assignment_totals ON assignment_totals.booking_id = b.id
-    WHERE b.country_id = ? AND b.status <> 'Cancelled'
+    WHERE b.country_id = ?
+        AND b.status <> 'Cancelled'
+        AND COALESCE(assignment_totals.assigned_athletes, 0) > 0
     ORDER BY c.start_date ASC, h.name ASC, rt.name ASC");
 $financeStmt->execute([$countryId]);
 $financeRows = $financeStmt->fetchAll(PDO::FETCH_ASSOC);

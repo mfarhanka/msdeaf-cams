@@ -14,6 +14,18 @@ function syncReservedRooms(PDO $pdo, int $bookingId): void
     $updateBookingStmt->execute([$roomsReserved, $bookingId]);
 }
 
+function cleanupEmptyBookings(PDO $pdo, int $countryId): void
+{
+    $deleteStmt = $pdo->prepare(
+        "DELETE b FROM bookings b
+        LEFT JOIN room_assignments ra ON ra.booking_id = b.id
+        WHERE b.country_id = ?
+            AND b.status <> 'Cancelled'
+            AND ra.id IS NULL"
+    );
+    $deleteStmt->execute([$countryId]);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'assign_room') {
         $athleteId = intval($_POST['athlete_id'] ?? 0);
@@ -101,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             if ($previousBookingId && $previousBookingId !== intval($bookingId)) {
                                 syncReservedRooms($pdo, $previousBookingId);
                             }
+                            cleanupEmptyBookings($pdo, $countryId);
 
                             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-check-circle'></i> Room assigned successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
                         }
@@ -131,6 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if ($bookingId) {
                         syncReservedRooms($pdo, $bookingId);
                     }
+                    cleanupEmptyBookings($pdo, $countryId);
                     $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-times-circle'></i> Room unassigned successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
                 } else {
                     $msg = "<div class='alert alert-danger'>Failed to unassign room.</div>";
@@ -143,6 +157,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
 }
+
+cleanupEmptyBookings($pdo, $countryId);
 
 // Get athletes for this country
 $athletesStmt = $pdo->prepare("SELECT a.*, ra.room_number, ra.booking_id, b.room_type_id AS current_room_type_id, b.championship_id AS current_championship_id
