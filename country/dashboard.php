@@ -7,7 +7,7 @@ $athleteStmt = $pdo->prepare("SELECT COUNT(*) FROM athletes WHERE country_id = ?
 $athleteStmt->execute([$countryId]);
 $athleteCount = $athleteStmt->fetchColumn();
 
-$roomStmt = $pdo->prepare("SELECT COUNT(*) FROM bookings WHERE country_id = ?");
+$roomStmt = $pdo->prepare("SELECT COALESCE(SUM(rooms_reserved), 0) FROM bookings WHERE country_id = ? AND status <> 'Cancelled'");
 $roomStmt->execute([$countryId]);
 $roomsBooked = $roomStmt->fetchColumn();
 
