@@ -56,8 +56,24 @@ $hotels_stmt = $pdo->query("
 ");
 $hotels = $hotels_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch all room types
-$room_types_stmt = $pdo->query("SELECT r.*, h.name as hotel_name FROM room_types r JOIN hotels h ON r.hotel_id = h.id ORDER BY h.name ASC");
+$selectedHotelId = isset($_GET['hotel_id']) ? (int) $_GET['hotel_id'] : 0;
+$selectedHotelName = 'All Hotels';
+
+if ($selectedHotelId > 0) {
+    foreach ($hotels as $hotel) {
+        if ((int) $hotel['id'] === $selectedHotelId) {
+            $selectedHotelName = $hotel['name'];
+            break;
+        }
+    }
+}
+
+if ($selectedHotelId > 0) {
+    $room_types_stmt = $pdo->prepare("SELECT r.*, h.name as hotel_name FROM room_types r JOIN hotels h ON r.hotel_id = h.id WHERE r.hotel_id = ? ORDER BY r.name ASC");
+    $room_types_stmt->execute([$selectedHotelId]);
+} else {
+    $room_types_stmt = $pdo->query("SELECT r.*, h.name as hotel_name FROM room_types r JOIN hotels h ON r.hotel_id = h.id ORDER BY h.name ASC, r.name ASC");
+}
 $room_types = $room_types_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 require_once 'includes/header.php';
@@ -120,6 +136,23 @@ require_once 'includes/header.php';
         </button>
     </div>
     <div class="card-body">
+        <form method="GET" class="row g-2 align-items-end mb-3">
+            <div class="col-md-6 col-lg-4">
+                <label for="roomTypeHotelFilter" class="form-label text-muted fw-bold">Show Pricing For Hotel</label>
+                <select id="roomTypeHotelFilter" name="hotel_id" class="form-select" onchange="this.form.submit()">
+                    <option value="0">All Hotels</option>
+                    <?php foreach ($hotels as $hotel): ?>
+                        <option value="<?php echo (int) $hotel['id']; ?>" <?php echo $selectedHotelId === (int) $hotel['id'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($hotel['name']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-6 col-lg-8">
+                <div class="text-muted small">Currently showing: <span class="fw-semibold"><?php echo htmlspecialchars($selectedHotelName); ?></span></div>
+            </div>
+        </form>
+
         <?php if (count($room_types) > 0): ?>
             <table class="table table-hover align-middle">
                 <thead class="table-light">
@@ -152,7 +185,7 @@ require_once 'includes/header.php';
                 </tbody>
             </table>
         <?php else: ?>
-            <div class="alert alert-info text-center">No room types defined yet. Click "Add Room Type" to set pricing.</div>
+            <div class="alert alert-info text-center">No room types found for the selected hotel.</div>
         <?php endif; ?>
     </div>
 </div>
