@@ -59,6 +59,16 @@ foreach ($athletes as $athlete) {
     $athletesByCountry[$countryName][] = $athlete;
 }
 
+$delegationStatsByCountry = [];
+foreach ($delegationSummary as $delegationRow) {
+    $countryName = $delegationRow['country_name'] ?: 'Unassigned Country';
+    $delegationStatsByCountry[$countryName] = [
+        'athlete_count' => (int) $delegationRow['athlete_count'],
+        'sized_count' => (int) $delegationRow['sized_count'],
+        'pending_count' => (int) $delegationRow['pending_count'],
+    ];
+}
+
 require_once 'includes/header.php';
 ?>
 
@@ -129,42 +139,79 @@ require_once 'includes/header.php';
 </div>
 
 <?php if (count($athletesByCountry) > 0): ?>
-    <?php foreach ($athletesByCountry as $countryName => $countryAthletes): ?>
-        <div class="card shadow-sm mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span><?php echo htmlspecialchars($countryName); ?></span>
-                <span class="text-muted small"><?php echo count($countryAthletes); ?> athlete(s)</span>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Name</th>
-                                <th>Gender</th>
-                                <th>T-Shirt Size</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($countryAthletes as $athlete): ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($athlete['first_name'] . ' ' . $athlete['last_name']); ?></td>
-                                    <td><?php echo htmlspecialchars($athlete['gender']); ?></td>
-                                    <td>
-                                        <?php if (!empty($athlete['tshirt_size'])): ?>
-                                            <span class="badge bg-primary-subtle text-primary border"><?php echo htmlspecialchars($athlete['tshirt_size']); ?></span>
-                                        <?php else: ?>
-                                            <span class="text-muted">Not set</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div>
+                    <h5 class="card-title mb-1">Athletes by Country</h5>
+                    <p class="text-muted small mb-0">Expand a country to review submitted and pending T-shirt sizes.</p>
                 </div>
+                <span class="text-muted small"><?php echo count($athletesByCountry); ?> country group(s)</span>
+            </div>
+
+            <div class="accordion" id="countryTshirtAccordion">
+                <?php $countryIndex = 0; ?>
+                <?php foreach ($athletesByCountry as $countryName => $countryAthletes): ?>
+                    <?php
+                    $accordionId = 'countryTshirt' . $countryIndex;
+                    $headingId = $accordionId . 'Heading';
+                    $collapseId = $accordionId . 'Collapse';
+                    $countryStats = $delegationStatsByCountry[$countryName] ?? [
+                        'athlete_count' => count($countryAthletes),
+                        'sized_count' => 0,
+                        'pending_count' => 0,
+                    ];
+                    $isExpanded = $countryIndex === 0;
+                    ?>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="<?php echo htmlspecialchars($headingId); ?>">
+                            <button class="accordion-button<?php echo $isExpanded ? '' : ' collapsed'; ?>" type="button" data-bs-toggle="collapse" data-bs-target="#<?php echo htmlspecialchars($collapseId); ?>" aria-expanded="<?php echo $isExpanded ? 'true' : 'false'; ?>" aria-controls="<?php echo htmlspecialchars($collapseId); ?>">
+                                <div class="w-100 d-flex justify-content-between align-items-center flex-wrap gap-2 pe-3">
+                                    <span class="fw-semibold"><?php echo htmlspecialchars($countryName); ?></span>
+                                    <span class="d-flex align-items-center flex-wrap gap-2 small">
+                                        <span class="badge text-bg-light border text-dark"><?php echo $countryStats['athlete_count']; ?> athlete(s)</span>
+                                        <span class="badge text-bg-success"><?php echo $countryStats['sized_count']; ?> submitted</span>
+                                        <span class="badge text-bg-warning text-dark"><?php echo $countryStats['pending_count']; ?> pending</span>
+                                    </span>
+                                </div>
+                            </button>
+                        </h2>
+                        <div id="<?php echo htmlspecialchars($collapseId); ?>" class="accordion-collapse collapse<?php echo $isExpanded ? ' show' : ''; ?>" aria-labelledby="<?php echo htmlspecialchars($headingId); ?>" data-bs-parent="#countryTshirtAccordion">
+                            <div class="accordion-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Gender</th>
+                                                <th>T-Shirt Size</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($countryAthletes as $athlete): ?>
+                                                <tr>
+                                                    <td><?php echo htmlspecialchars($athlete['first_name'] . ' ' . $athlete['last_name']); ?></td>
+                                                    <td><?php echo htmlspecialchars($athlete['gender']); ?></td>
+                                                    <td>
+                                                        <?php if (!empty($athlete['tshirt_size'])): ?>
+                                                            <span class="badge bg-primary-subtle text-primary border"><?php echo htmlspecialchars($athlete['tshirt_size']); ?></span>
+                                                        <?php else: ?>
+                                                            <span class="text-muted">Not set</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php $countryIndex++; ?>
+                <?php endforeach; ?>
             </div>
         </div>
-    <?php endforeach; ?>
+    </div>
 <?php else: ?>
     <div class="card shadow-sm">
         <div class="card-body">
