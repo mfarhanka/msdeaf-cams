@@ -25,26 +25,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     if (!empty($user) && !empty($pass) && isset($pdo)) {
         // Find user in database based on roles
-        $stmt = $pdo->prepare("SELECT id, username, password, role FROM users WHERE username = :username");
+        $stmt = $pdo->prepare("SELECT id, username, password, role, status FROM users WHERE username = :username");
         $stmt->bindParam(':username', $user);
         $stmt->execute();
 
         if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             // Validate password using password_verify()
             if (password_verify($pass, $row['password'])) {
-                // Password matches, start user session
-                $_SESSION['loggedin'] = true;
-                $_SESSION['id'] = $row['id'];
-                $_SESSION['username'] = $row['username'];
-                $_SESSION['role'] = $row['role']; // e.g. 'admin' or 'country_manager'
-                
-                // Redirect depending on role
-                if ($row['role'] === 'admin') {
-                    header("location: admin/dashboard.php");
+                if (($row['status'] ?? 'active') !== 'active') {
+                    $error = "Your account has been suspended. Please contact the system administrator.";
                 } else {
-                    header("location: country/dashboard.php");
+                // Password matches, start user session
+                    $_SESSION['loggedin'] = true;
+                    $_SESSION['id'] = $row['id'];
+                    $_SESSION['username'] = $row['username'];
+                    $_SESSION['role'] = $row['role']; // e.g. 'admin' or 'country_manager'
+
+                    // Redirect depending on role
+                    if ($row['role'] === 'admin') {
+                        header("location: admin/dashboard.php");
+                    } else {
+                        header("location: country/dashboard.php");
+                    }
+                    exit;
                 }
-                exit;
             } else {
                 $error = "Invalid username or password.";
             }

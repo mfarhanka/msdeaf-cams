@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     role ENUM('admin', 'country_manager') NOT NULL,
+    status ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
     country_name VARCHAR(100) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -93,6 +94,6 @@ CREATE TABLE IF NOT EXISTS room_assignments (
 );
 
 -- Insert Default Admin User (Password is 'admin123')
-INSERT IGNORE INTO users (username, password, role) VALUES ('admin', '$2y$10$TzJaQ78Qxa8YHjTGwZazdexzPGIENiwkfIfhezgeFvEVCMVNCWl06', 'admin');
+INSERT IGNORE INTO users (username, password, role, status) VALUES ('admin', '$2y$10$TzJaQ78Qxa8YHjTGwZazdexzPGIENiwkfIfhezgeFvEVCMVNCWl06', 'admin', 'active');
 -- Insert Default Country Manager (Password is 'usa123')
-INSERT IGNORE INTO users (username, password, role, country_name) VALUES ('usa', '$2y$10$ozllFh7PXvKC6396PGprX.pr1f9IUUCCZoEmVIIm4O/p2gzeDd1pO', 'country_manager', 'USA');
+INSERT IGNORE INTO users (username, password, role, status, country_name) VALUES ('usa', '$2y$10$ozllFh7PXvKC6396PGprX.pr1f9IUUCCZoEmVIIm4O/p2gzeDd1pO', 'country_manager', 'active', 'USA');

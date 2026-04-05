@@ -132,6 +132,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <div class="admin-only">
                     <h6 class="px-3 mb-2 text-muted small text-uppercase fw-bold">Management</h6>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
+                    <a class="nav-link w-100 text-start <?php echo $current_page == 'admins.php' ? 'active' : ''; ?>" href="admins.php"><i class="bi bi-shield-lock me-2"></i>Admins</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'championships.php' ? 'active' : ''; ?>" href="championships.php"><i class="bi bi-trophy me-2"></i>Championships</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'hotels.php' ? 'active' : ''; ?>" href="hotels.php"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'delegations.php' ? 'active' : ''; ?>" href="delegations.php"><i class="bi bi-globe me-2"></i>Delegations</a>
