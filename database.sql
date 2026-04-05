@@ -11,8 +11,10 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     role ENUM('admin', 'country_manager') NOT NULL,
     status ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
+    suspended_at TIMESTAMP NULL DEFAULT NULL,
     country_name VARCHAR(100) NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- Championships Table

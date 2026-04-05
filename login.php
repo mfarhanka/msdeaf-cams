@@ -1,20 +1,7 @@
 <?php
 session_start();
-
-// Database connection details
-$host = 'localhost';
-$dbname = 'msdeaf_cams'; // Matching the CAMS shorthand
-$username = 'root';
-$password = '';
-
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
-    // Set the PDO error mode to exception
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch(PDOException $e) {
-    // For production, log the error rather than displaying it
-    $db_error = "Database connection failed. Please contact the administrator.";
-}
+$suppressDbErrors = true;
+require_once __DIR__ . '/includes/db.php';
 
 $error = '';
 
