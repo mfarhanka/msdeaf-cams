@@ -189,8 +189,6 @@ require_once 'includes/header.php';
     <h1 class="h2">Room Assignments</h1>
 </div>
 
-<?php if (!empty($msg)) echo $msg; ?>
-
 <div class="row g-3">
     <div class="col-lg-8">
         <div class="card shadow-sm">
