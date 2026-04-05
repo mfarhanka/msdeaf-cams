@@ -135,6 +135,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'championships.php' ? 'active' : ''; ?>" href="championships.php"><i class="bi bi-trophy me-2"></i>Championships</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'hotels.php' ? 'active' : ''; ?>" href="hotels.php"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'delegations.php' ? 'active' : ''; ?>" href="delegations.php"><i class="bi bi-globe me-2"></i>Delegations</a>
+                    <a class="nav-link w-100 text-start <?php echo $current_page == 'finance.php' ? 'active' : ''; ?>" href="finance.php"><i class="bi bi-receipt-cutoff me-2"></i>Financial Report</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'tshirts.php' ? 'active' : ''; ?>" href="tshirts.php"><i class="bi bi-tags me-2"></i>T-Shirt Sizes</a>
                 </div>
             </div>
