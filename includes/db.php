@@ -1,9 +1,6 @@
 <?php
 // includes/db.php
-$host = 'localhost';
-$dbname = 'msdeaf_cams';
-$username = 'root';
-$password = '';
+require_once __DIR__ . '/db_config.php';
 
 function ensureUserStatusColumn(PDO $pdo): void
 {
@@ -55,10 +52,16 @@ function ensureUserStatusColumn(PDO $pdo): void
 }
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
+    $dbConfig = getDatabaseConfig();
+    $host = $dbConfig['host'];
+    $dbname = $dbConfig['dbname'];
+    $username = $dbConfig['username'];
+    $password = $dbConfig['password'];
+
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     ensureUserStatusColumn($pdo);
-} catch(PDOException $e) {
+} catch(Exception $e) {
     if (!empty($suppressDbErrors)) {
         $pdo = null;
         $db_error = "Database connection failed. Please contact the administrator.";

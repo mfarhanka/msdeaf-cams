@@ -1,8 +1,8 @@
 -- database.sql
 -- Run this in phpMyAdmin or your MySQL client
 
-CREATE DATABASE IF NOT EXISTS msdeaf_cams;
-USE msdeaf_cams;
+-- Select the target database before importing this file.
+-- Example: USE your_database_name;
 
 -- Users Table (Admin & Country Managers)
 CREATE TABLE IF NOT EXISTS users (
