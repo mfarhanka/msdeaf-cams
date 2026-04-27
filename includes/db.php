@@ -2,6 +2,38 @@
 // includes/db.php
 require_once __DIR__ . '/db_config.php';
 
+function ensureActivityLogTable(PDO $pdo): void
+{
+    static $activityLogChecked = false;
+
+    if ($activityLogChecked) {
+        return;
+    }
+
+    $activityLogChecked = true;
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS activity_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            actor_user_id INT NULL,
+            actor_role VARCHAR(50) NULL,
+            actor_username VARCHAR(100) NULL,
+            action VARCHAR(100) NOT NULL,
+            entity_type VARCHAR(50) NULL,
+            entity_id INT NULL,
+            description TEXT NULL,
+            metadata_json LONGTEXT NULL,
+            ip_address VARCHAR(45) NULL,
+            user_agent VARCHAR(255) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_activity_logs_created_at (created_at),
+            INDEX idx_activity_logs_actor_user_id (actor_user_id),
+            INDEX idx_activity_logs_entity (entity_type, entity_id),
+            CONSTRAINT fk_activity_logs_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+}
+
 function ensureUserStatusColumn(PDO $pdo): void
 {
     static $statusChecked = false;
@@ -61,6 +93,7 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     ensureUserStatusColumn($pdo);
+    ensureActivityLogTable($pdo);
 } catch(Exception $e) {
     if (!empty($suppressDbErrors)) {
         $pdo = null;

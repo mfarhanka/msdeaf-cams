@@ -6,6 +6,7 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['role'] !== 'admin') {
     exit;
 }
 require_once '../includes/db.php';
+require_once '../includes/activity.php';
 
 $stmt = $pdo->prepare("SELECT username, role, status FROM users WHERE id = ? LIMIT 1");
 $stmt->execute([$_SESSION['id'] ?? 0]);

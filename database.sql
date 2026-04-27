@@ -85,6 +85,25 @@ CREATE TABLE IF NOT EXISTS bookings (
     FOREIGN KEY (room_type_id) REFERENCES room_types(id)
 );
 
+CREATE TABLE IF NOT EXISTS activity_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id INT NULL,
+    actor_role VARCHAR(50) NULL,
+    actor_username VARCHAR(100) NULL,
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50) NULL,
+    entity_id INT NULL,
+    description TEXT NULL,
+    metadata_json LONGTEXT NULL,
+    ip_address VARCHAR(45) NULL,
+    user_agent VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_activity_logs_created_at (created_at),
+    INDEX idx_activity_logs_actor_user_id (actor_user_id),
+    INDEX idx_activity_logs_entity (entity_type, entity_id),
+    CONSTRAINT fk_activity_logs_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
 -- Room Assignments
 CREATE TABLE IF NOT EXISTS room_assignments (
     id INT AUTO_INCREMENT PRIMARY KEY,

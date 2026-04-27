@@ -18,6 +18,7 @@ function countActiveAdmins(PDO $pdo): int
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
+    $actor = getActorDetailsFromSession();
 
     if ($action === 'add_admin') {
         $username = trim($_POST['username'] ?? '');
@@ -28,6 +29,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("INSERT INTO users (username, password, role, status) VALUES (?, ?, 'admin', 'active')");
                 $stmt->execute([$username, $hash]);
+                $newAdminId = (int) $pdo->lastInsertId();
+                recordActivity(
+                    $pdo,
+                    'admin_created',
+                    'user',
+                    $newAdminId,
+                    'Administrator account created.',
+                    ['username' => $username, 'role' => 'admin'],
+                    $actor['id'],
+                    $actor['role'],
+                    $actor['username'],
+                    formatTelegramActivityMessage('CAMS admin change', ['Action: create admin', 'By: ' . $actor['username'], 'Username: ' . $username])
+                );
                 $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-user-shield'></i> Admin added successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
             } catch (PDOException $e) {
                 if ($e->getCode() === '23000') {
@@ -62,7 +76,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 if ($adminId === (int) $_SESSION['id']) {
                     $_SESSION['username'] = $username;
+                    $actor['username'] = $username;
                 }
+
+                recordActivity(
+                    $pdo,
+                    'admin_updated',
+                    'user',
+                    $adminId,
+                    'Administrator account updated.',
+                    ['old_username' => $admin['username'], 'new_username' => $username, 'password_changed' => $password !== ''],
+                    $actor['id'],
+                    $actor['role'],
+                    $actor['username'],
+                    formatTelegramActivityMessage('CAMS admin change', ['Action: update admin', 'By: ' . $actor['username'], 'Username: ' . $username])
+                );
 
                 $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-user-edit'></i> Admin updated successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
             } catch (PDOException $e) {
@@ -89,6 +117,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $pdo->prepare("UPDATE users SET status = ?, suspended_at = ? WHERE id = ? AND role = 'admin'");
             $stmt->execute([$newStatus, $suspendedAt, $adminId]);
 
+            recordActivity(
+                $pdo,
+                $newStatus === 'active' ? 'admin_reactivated' : 'admin_suspended',
+                'user',
+                $adminId,
+                'Administrator status updated.',
+                ['username' => $admin['username'], 'status' => $newStatus],
+                $actor['id'],
+                $actor['role'],
+                $actor['username'],
+                formatTelegramActivityMessage('CAMS admin change', ['Action: ' . ($newStatus === 'active' ? 'reactivate admin' : 'suspend admin'), 'By: ' . $actor['username'], 'Username: ' . $admin['username']])
+            );
+
             $label = $newStatus === 'active' ? 'reactivated' : 'suspended';
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-user-lock'></i> Admin {$label} successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
@@ -105,6 +146,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } else {
             $stmt = $pdo->prepare("DELETE FROM users WHERE id = ? AND role = 'admin'");
             $stmt->execute([$adminId]);
+            recordActivity(
+                $pdo,
+                'admin_deleted',
+                'user',
+                $adminId,
+                'Administrator account deleted.',
+                ['username' => $admin['username']],
+                $actor['id'],
+                $actor['role'],
+                $actor['username'],
+                formatTelegramActivityMessage('CAMS admin change', ['Action: delete admin', 'By: ' . $actor['username'], 'Username: ' . $admin['username']])
+            );
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-trash'></i> Admin removed successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
     }

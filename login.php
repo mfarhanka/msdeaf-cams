@@ -2,6 +2,7 @@
 session_start();
 $suppressDbErrors = true;
 require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/activity.php';
 
 $error = '';
 
@@ -20,6 +21,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Validate password using password_verify()
             if (password_verify($pass, $row['password'])) {
                 if (($row['status'] ?? 'active') !== 'active') {
+                    recordActivity(
+                        $pdo,
+                        'login_blocked',
+                        'user',
+                        (int) $row['id'],
+                        'Suspended user attempted to sign in.',
+                        ['username_input' => $user],
+                        (int) $row['id'],
+                        (string) $row['role'],
+                        (string) $row['username']
+                    );
                     $error = "Your account has been suspended. Please contact the system administrator.";
                 } else {
                 // Password matches, start user session
@@ -27,6 +39,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $_SESSION['id'] = $row['id'];
                     $_SESSION['username'] = $row['username'];
                     $_SESSION['role'] = $row['role']; // e.g. 'admin' or 'country_manager'
+
+                    $telegramMessage = formatTelegramActivityMessage(
+                        'CAMS login',
+                        [
+                            'User: ' . $row['username'],
+                            'Role: ' . $row['role'],
+                            'Status: success',
+                        ]
+                    );
+                    recordActivity(
+                        $pdo,
+                        'login_success',
+                        'user',
+                        (int) $row['id'],
+                        'User signed in successfully.',
+                        [],
+                        (int) $row['id'],
+                        (string) $row['role'],
+                        (string) $row['username'],
+                        $telegramMessage
+                    );
 
                     // Redirect depending on role
                     if ($row['role'] === 'admin') {
@@ -37,9 +70,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     exit;
                 }
             } else {
+                recordActivity(
+                    $pdo,
+                    'login_failed',
+                    'user',
+                    (int) $row['id'],
+                    'Password verification failed during sign-in.',
+                    ['username_input' => $user],
+                    null,
+                    null,
+                    $user
+                );
                 $error = "Invalid username or password.";
             }
         } else {
+            recordActivity(
+                $pdo,
+                'login_failed',
+                'user',
+                null,
+                'Unknown username attempted to sign in.',
+                ['username_input' => $user],
+                null,
+                null,
+                $user
+            );
             $error = "Invalid username or password.";
         }
     } elseif(empty($pdo)) {

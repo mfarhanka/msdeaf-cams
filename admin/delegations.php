@@ -11,6 +11,8 @@ function fetchDelegationById(PDO $pdo, int $delegationId): ?array
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    $actor = getActorDetailsFromSession();
+
     if ($_POST['action'] === 'add_delegation') {
         $username = trim($_POST['username'] ?? '');
         $country_name = trim($_POST['country_name'] ?? '');
@@ -21,6 +23,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("INSERT INTO users (username, password, role, status, country_name) VALUES (?, ?, 'country_manager', 'active', ?)");
                 $stmt->execute([$username, $hash, $country_name]);
+                $delegationId = (int) $pdo->lastInsertId();
+                recordActivity(
+                    $pdo,
+                    'delegation_created',
+                    'user',
+                    $delegationId,
+                    'Delegation account created.',
+                    ['username' => $username, 'country_name' => $country_name],
+                    $actor['id'],
+                    $actor['role'],
+                    $actor['username'],
+                    formatTelegramActivityMessage('CAMS delegation change', ['Action: create delegation', 'By: ' . $actor['username'], 'Country: ' . $country_name, 'Username: ' . $username])
+                );
                 $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-user-plus'></i> Delegation added successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
             } catch (PDOException $e) {
                 if ($e->getCode() === '23000') {
@@ -51,6 +66,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $stmt = $pdo->prepare("UPDATE users SET username=?, country_name=? WHERE id=? AND role='country_manager'");
                     $stmt->execute([$username, $country_name, $id]);
                 }
+                recordActivity(
+                    $pdo,
+                    'delegation_updated',
+                    'user',
+                    $id,
+                    'Delegation account updated.',
+                    ['old_username' => $delegation['username'], 'new_username' => $username, 'country_name' => $country_name, 'password_changed' => $password !== ''],
+                    $actor['id'],
+                    $actor['role'],
+                    $actor['username'],
+                    formatTelegramActivityMessage('CAMS delegation change', ['Action: update delegation', 'By: ' . $actor['username'], 'Country: ' . $country_name, 'Username: ' . $username])
+                );
                 $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-user-edit'></i> Delegation updated successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
             } catch (PDOException $e) {
                 if ($e->getCode() === '23000') {
@@ -74,13 +101,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $pdo->prepare("UPDATE users SET status = ?, suspended_at = ? WHERE id = ? AND role = 'country_manager'");
             $stmt->execute([$newStatus, $suspendedAt, $id]);
 
+            recordActivity(
+                $pdo,
+                $newStatus === 'active' ? 'delegation_reactivated' : 'delegation_suspended',
+                'user',
+                $id,
+                'Delegation status updated.',
+                ['username' => $delegation['username'], 'country_name' => $delegation['country_name'], 'status' => $newStatus],
+                $actor['id'],
+                $actor['role'],
+                $actor['username'],
+                formatTelegramActivityMessage('CAMS delegation change', ['Action: ' . ($newStatus === 'active' ? 'reactivate delegation' : 'suspend delegation'), 'By: ' . $actor['username'], 'Country: ' . $delegation['country_name'], 'Username: ' . $delegation['username']])
+            );
+
             $label = $newStatus === 'active' ? 'reactivated' : 'suspended';
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-user-lock'></i> Delegation {$label} successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
     } elseif ($_POST['action'] === 'delete_delegation') {
         $id = (int) ($_POST['id'] ?? 0);
+        $delegation = fetchDelegationById($pdo, $id);
         $stmt = $pdo->prepare("DELETE FROM users WHERE id=? AND role='country_manager'");
         if ($stmt->execute([$id])) {
+            if ($delegation) {
+                recordActivity(
+                    $pdo,
+                    'delegation_deleted',
+                    'user',
+                    $id,
+                    'Delegation account deleted.',
+                    ['username' => $delegation['username'], 'country_name' => $delegation['country_name']],
+                    $actor['id'],
+                    $actor['role'],
+                    $actor['username'],
+                    formatTelegramActivityMessage('CAMS delegation change', ['Action: delete delegation', 'By: ' . $actor['username'], 'Country: ' . $delegation['country_name'], 'Username: ' . $delegation['username']])
+                );
+            }
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-trash'></i> Delegation removed.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
     }
