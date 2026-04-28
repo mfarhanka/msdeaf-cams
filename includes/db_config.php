@@ -71,6 +71,18 @@ function getFirstEnvironmentValue(array $keys): ?string
 
 function detectDatabaseEnvironment(): string
 {
+    $forcedEnvironment = getenv('APP_ENV') ?: getenv('DB_ENV');
+    if (is_string($forcedEnvironment) && $forcedEnvironment !== '') {
+        $normalizedEnvironment = strtolower(trim($forcedEnvironment));
+        if ($normalizedEnvironment === 'local') {
+            return 'local';
+        }
+
+        if ($normalizedEnvironment === 'server' || $normalizedEnvironment === 'production') {
+            return 'server';
+        }
+    }
+
     $hostCandidates = [
         $_SERVER['HTTP_HOST'] ?? null,
         $_SERVER['SERVER_NAME'] ?? null,
@@ -96,11 +108,6 @@ function detectDatabaseEnvironment(): string
     $normalizedPath = str_replace('\\', '/', __DIR__);
     if (strpos(strtolower($normalizedPath), '/xampp/htdocs/') !== false) {
         return 'local';
-    }
-
-    $forcedEnvironment = getenv('APP_ENV') ?: getenv('DB_ENV');
-    if (is_string($forcedEnvironment) && $forcedEnvironment !== '') {
-        return strtolower($forcedEnvironment) === 'local' ? 'local' : 'server';
     }
 
     return 'server';
