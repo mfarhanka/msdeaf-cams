@@ -1,5 +1,62 @@
 <?php
 
+function loadEnvironmentFile(?string $filePath = null): void
+{
+    static $loadedFiles = [];
+
+    $resolvedPath = $filePath ?: dirname(__DIR__) . '/.env';
+    if (isset($loadedFiles[$resolvedPath]) || !is_file($resolvedPath) || !is_readable($resolvedPath)) {
+        return;
+    }
+
+    $lines = file($resolvedPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if ($lines === false) {
+        return;
+    }
+
+    foreach ($lines as $rawLine) {
+        $line = trim($rawLine);
+        if ($line === '' || $line[0] === '#') {
+            continue;
+        }
+
+        if (str_starts_with($line, 'export ')) {
+            $line = trim(substr($line, 7));
+        }
+
+        $separatorPosition = strpos($line, '=');
+        if ($separatorPosition === false) {
+            continue;
+        }
+
+        $key = trim(substr($line, 0, $separatorPosition));
+        $value = trim(substr($line, $separatorPosition + 1));
+
+        if ($key === '' || preg_match('/^[A-Z0-9_]+$/i', $key) !== 1) {
+            continue;
+        }
+
+        $firstCharacter = $value !== '' ? $value[0] : '';
+        $lastCharacter = $value !== '' ? substr($value, -1) : '';
+        if (($firstCharacter === '"' && $lastCharacter === '"') || ($firstCharacter === "'" && $lastCharacter === "'")) {
+            $value = substr($value, 1, -1);
+        } else {
+            $commentPosition = strpos($value, ' #');
+            if ($commentPosition !== false) {
+                $value = rtrim(substr($value, 0, $commentPosition));
+            }
+        }
+
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+
+    $loadedFiles[$resolvedPath] = true;
+}
+
+loadEnvironmentFile();
+
 function getFirstEnvironmentValue(array $keys): ?string
 {
     foreach ($keys as $key) {
@@ -55,17 +112,17 @@ function getDatabaseConfig(): array
 
     if ($environment === 'local') {
         return [
-            'host' => getFirstEnvironmentValue(['DB_LOCAL_HOST']) ?: 'localhost',
-            'dbname' => getFirstEnvironmentValue(['DB_LOCAL_NAME']) ?: 'msdeaf_cams',
-            'username' => getFirstEnvironmentValue(['DB_LOCAL_USER']) ?: 'root',
-            'password' => getFirstEnvironmentValue(['DB_LOCAL_PASS']) ?: '',
+            'host' => getFirstEnvironmentValue(['DB_LOCAL_HOST', 'DB_HOST']) ?: 'localhost',
+            'dbname' => getFirstEnvironmentValue(['DB_LOCAL_NAME', 'DB_NAME']) ?: 'msdeaf_cams',
+            'username' => getFirstEnvironmentValue(['DB_LOCAL_USER', 'DB_USER']) ?: 'root',
+            'password' => getFirstEnvironmentValue(['DB_LOCAL_PASS', 'DB_PASSWORD']) ?: '',
         ];
     }
 
     $host = getFirstEnvironmentValue(['DB_SERVER_HOST', 'DB_HOST']);
     $username = getFirstEnvironmentValue(['DB_SERVER_USER', 'DB_USER']);
     $password = getFirstEnvironmentValue(['DB_SERVER_PASS', 'DB_PASSWORD']);
-    $dbname = getFirstEnvironmentValue(['DB_SERVER_NAME', 'DB_NAME']) ?: 'msdeafor_cams';
+    $dbname = getFirstEnvironmentValue(['DB_SERVER_NAME', 'DB_NAME']);
 
     $missingKeys = [];
     if ($host === null) {
@@ -76,6 +133,9 @@ function getDatabaseConfig(): array
     }
     if ($password === null) {
         $missingKeys[] = 'DB_SERVER_PASS or DB_PASSWORD';
+    }
+    if ($dbname === null) {
+        $missingKeys[] = 'DB_SERVER_NAME or DB_NAME';
     }
 
     if ($missingKeys !== []) {
