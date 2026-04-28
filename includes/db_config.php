@@ -64,6 +64,14 @@ function getFirstEnvironmentValue(array $keys): ?string
         if ($value !== false && $value !== '') {
             return $value;
         }
+
+        if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+
+        if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') {
+            return $_SERVER[$key];
+        }
     }
 
     return null;
@@ -71,7 +79,7 @@ function getFirstEnvironmentValue(array $keys): ?string
 
 function detectDatabaseEnvironment(): string
 {
-    $forcedEnvironment = getenv('APP_ENV') ?: getenv('DB_ENV');
+    $forcedEnvironment = getFirstEnvironmentValue(['APP_ENV', 'DB_ENV']);
     if (is_string($forcedEnvironment) && $forcedEnvironment !== '') {
         $normalizedEnvironment = strtolower(trim($forcedEnvironment));
         if ($normalizedEnvironment === 'local') {
