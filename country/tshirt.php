@@ -102,8 +102,30 @@ require_once 'includes/header.php';
         <div class="card shadow-sm">
             <div class="card-body">
                 <h5 class="card-title mb-3">T-Shirt Chart</h5>
-                <img src="../tshirt-chart.png" alt="T-shirt size chart" class="img-fluid rounded border">
-                <p class="text-muted small mt-3 mb-0">Use this chart when selecting sizes from <strong>XS</strong> to <strong>10XL</strong>.</p>
+                <button
+                    type="button"
+                    class="btn p-0 border-0 bg-transparent text-start w-100"
+                    data-bs-toggle="modal"
+                    data-bs-target="#tshirtChartModal"
+                    aria-label="Open T-shirt size chart"
+                >
+                    <img src="../tshirt-chart.png" alt="T-shirt size chart" class="img-fluid rounded border shadow-sm">
+                </button>
+                <p class="text-muted small mt-3 mb-0">Click the chart to view it in a larger modal. Use this chart when selecting sizes from <strong>XS</strong> to <strong>10XL</strong>.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="tshirtChartModal" tabindex="-1" aria-labelledby="tshirtChartModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="tshirtChartModalLabel">T-Shirt Size Chart</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img src="../tshirt-chart.png" alt="T-shirt size chart enlarged" class="img-fluid rounded border">
             </div>
         </div>
     </div>
