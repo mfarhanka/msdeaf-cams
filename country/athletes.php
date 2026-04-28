@@ -78,7 +78,7 @@ require_once 'includes/header.php';
 ?>
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
-    <h1 class="h2">Athlete & Official Roster</h1>
+    <h1 class="h2">Athletes &amp; Officials</h1>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAthleteModal">
         <i class="bi bi-person-plus me-1"></i> Add Athlete
     </button>

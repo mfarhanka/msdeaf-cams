@@ -40,7 +40,7 @@ Each country is assigned a unique login to manage their team.
 
 Athlete (Participant) Management:
 
-Roster Upload: Add, edit, or remove athletes/officials.
+Participant Upload: Add, edit, or remove athletes/officials.
 
 Profile Details: Capture name, gender (critical for rooming), and sport category.
 
