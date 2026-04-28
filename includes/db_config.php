@@ -57,6 +57,25 @@ function loadEnvironmentFile(?string $filePath = null): void
 
 loadEnvironmentFile();
 
+function isTruthyEnvironmentValue(?string $value): bool
+{
+    if ($value === null) {
+        return false;
+    }
+
+    return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'on'], true);
+}
+
+function shouldAutoManageDatabaseSchema(): bool
+{
+    $configuredValue = getFirstEnvironmentValue(['APP_AUTO_MIGRATE', 'DB_AUTO_SETUP']);
+    if ($configuredValue !== null) {
+        return isTruthyEnvironmentValue($configuredValue);
+    }
+
+    return detectDatabaseEnvironment() === 'local';
+}
+
 function getFirstEnvironmentValue(array $keys): ?string
 {
     foreach ($keys as $key) {
@@ -128,6 +147,7 @@ function getDatabaseConfig(): array
     if ($environment === 'local') {
         return [
             'host' => getFirstEnvironmentValue(['DB_LOCAL_HOST', 'DB_HOST']) ?: 'localhost',
+            'port' => getFirstEnvironmentValue(['DB_LOCAL_PORT', 'DB_PORT']),
             'dbname' => getFirstEnvironmentValue(['DB_LOCAL_NAME', 'DB_NAME']) ?: 'msdeaf_cams',
             'username' => getFirstEnvironmentValue(['DB_LOCAL_USER', 'DB_USER']) ?: 'root',
             'password' => getFirstEnvironmentValue(['DB_LOCAL_PASS', 'DB_PASSWORD']) ?: '',
@@ -135,6 +155,7 @@ function getDatabaseConfig(): array
     }
 
     $host = getFirstEnvironmentValue(['DB_SERVER_HOST', 'DB_HOST']);
+    $port = getFirstEnvironmentValue(['DB_SERVER_PORT', 'DB_PORT']);
     $username = getFirstEnvironmentValue(['DB_SERVER_USER', 'DB_USER']);
     $password = getFirstEnvironmentValue(['DB_SERVER_PASS', 'DB_PASSWORD']);
     $dbname = getFirstEnvironmentValue(['DB_SERVER_NAME', 'DB_NAME']);
@@ -161,9 +182,58 @@ function getDatabaseConfig(): array
 
     return [
         'host' => $host,
+        'port' => $port,
         'dbname' => $dbname,
         'username' => $username,
         'password' => $password,
+    ];
+}
+
+function buildDatabaseDsn(array $dbConfig): string
+{
+    $dsn = 'mysql:host=' . $dbConfig['host'] . ';dbname=' . $dbConfig['dbname'] . ';charset=utf8mb4';
+    if (!empty($dbConfig['port'])) {
+        $dsn .= ';port=' . $dbConfig['port'];
+    }
+
+    return $dsn;
+}
+
+function getDatabaseDebugSummary(): array
+{
+    $dbConfig = getDatabaseConfig();
+
+    return [
+        'app_env' => getFirstEnvironmentValue(['APP_ENV', 'DB_ENV']) ?: 'auto',
+        'detected_environment' => detectDatabaseEnvironment(),
+        'env_file' => [
+            'path' => dirname(__DIR__) . '/.env',
+            'exists' => is_file(dirname(__DIR__) . '/.env'),
+            'readable' => is_readable(dirname(__DIR__) . '/.env'),
+        ],
+        'database' => [
+            'host' => $dbConfig['host'],
+            'port' => $dbConfig['port'] ?? null,
+            'dbname' => $dbConfig['dbname'],
+            'username' => $dbConfig['username'],
+            'password_set' => ($dbConfig['password'] ?? '') !== '',
+        ],
+        'dsn' => buildDatabaseDsn($dbConfig),
+    ];
+}
+
+function getRequiredDatabaseTables(): array
+{
+    return [
+        'users',
+        'championships',
+        'hotels',
+        'championship_hotels',
+        'room_types',
+        'athletes',
+        'bookings',
+        'activity_logs',
+        'room_assignments',
     ];
 }
 ?>

@@ -10,15 +10,27 @@ if (!file_exists($sqlFile)) {
 try {
     $dbConfig = getDatabaseConfig();
     $host = $dbConfig['host'];
+    $port = $dbConfig['port'] ?? null;
     $dbname = $dbConfig['dbname'];
     $username = $dbConfig['username'];
     $password = $dbConfig['password'];
 
-    $serverPdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
-    $serverPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $serverPdo->exec("CREATE DATABASE IF NOT EXISTS `" . str_replace('`', '``', $dbname) . "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $serverDsn = 'mysql:host=' . $host . ';charset=utf8mb4';
+    if (!empty($port)) {
+        $serverDsn .= ';port=' . $port;
+    }
 
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    try {
+        $serverPdo = new PDO($serverDsn, $username, $password);
+        $serverPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $serverPdo->exec("CREATE DATABASE IF NOT EXISTS `" . str_replace('`', '``', $dbname) . "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    } catch (PDOException $e) {
+        if (stripos($e->getMessage(), 'access denied') === false && stripos($e->getMessage(), 'command denied') === false) {
+            throw $e;
+        }
+    }
+
+    $pdo = new PDO(buildDatabaseDsn($dbConfig), $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $sql = file_get_contents($sqlFile);

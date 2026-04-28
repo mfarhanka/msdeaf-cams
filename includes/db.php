@@ -86,15 +86,27 @@ function ensureUserStatusColumn(PDO $pdo): void
 try {
     $dbConfig = getDatabaseConfig();
     $host = $dbConfig['host'];
+    $port = $dbConfig['port'] ?? null;
     $dbname = $dbConfig['dbname'];
     $username = $dbConfig['username'];
     $password = $dbConfig['password'];
 
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo = new PDO(buildDatabaseDsn($dbConfig), $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    ensureUserStatusColumn($pdo);
-    ensureActivityLogTable($pdo);
+    if (shouldAutoManageDatabaseSchema()) {
+        ensureUserStatusColumn($pdo);
+        ensureActivityLogTable($pdo);
+    }
 } catch(Exception $e) {
+    error_log('Database connection failed: ' . json_encode([
+        'environment' => function_exists('detectDatabaseEnvironment') ? detectDatabaseEnvironment() : null,
+        'host' => $host ?? null,
+        'port' => $port ?? null,
+        'dbname' => $dbname ?? null,
+        'username' => $username ?? null,
+        'error' => $e->getMessage(),
+    ]));
+
     if (!empty($suppressDbErrors)) {
         $pdo = null;
         $db_error = "Database connection failed. Please contact the administrator.";
