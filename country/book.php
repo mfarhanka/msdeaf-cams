@@ -131,8 +131,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             if (!$booking) {
                 $msg = "<div class='alert alert-warning'>Reservation not found.</div>";
-            } elseif ((int) $booking['assigned_athletes'] > 0) {
-                $msg = "<div class='alert alert-warning'>Unassign athletes from this reservation before removing it.</div>";
             } else {
                 $bookingDetailsStmt = $pdo->prepare("SELECT c.title AS championship_title, h.name AS hotel_name, rt.name AS room_type_name, b.rooms_reserved
                     FROM bookings b
@@ -143,21 +141,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $bookingDetailsStmt->execute([$bookingId, $countryId]);
                 $bookingDetails = $bookingDetailsStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
-                $deleteStmt = $pdo->prepare("DELETE FROM bookings WHERE id = ? AND country_id = ?");
-                $deleteStmt->execute([$bookingId, $countryId]);
-                recordActivity(
-                    $pdo,
-                    'booking_deleted',
-                    'booking',
-                    $bookingId,
-                    'Accommodation reservation deleted.',
-                    $bookingDetails ?: [],
-                    $actor['id'],
-                    $actor['role'],
-                    $actor['username'],
-                    formatTelegramActivityMessage('CAMS booking update', ['Action: delete booking', 'Delegation: ' . $actor['username'], 'Hotel: ' . ($bookingDetails['hotel_name'] ?? 'Unknown'), 'Room type: ' . ($bookingDetails['room_type_name'] ?? 'Unknown')])
-                );
-                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi bi-trash me-1'></i>Reservation removed.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+                try {
+                    $pdo->beginTransaction();
+
+                    $assignedAthletes = (int) $booking['assigned_athletes'];
+                    if ($assignedAthletes > 0) {
+                        $clearAssignmentsStmt = $pdo->prepare("DELETE FROM room_assignments WHERE booking_id = ?");
+                        $clearAssignmentsStmt->execute([$bookingId]);
+                    }
+
+                    $deleteStmt = $pdo->prepare("DELETE FROM bookings WHERE id = ? AND country_id = ?");
+                    $deleteStmt->execute([$bookingId, $countryId]);
+
+                    $pdo->commit();
+
+                    $activityMetadata = $bookingDetails ?: [];
+                    if ($assignedAthletes > 0) {
+                        $activityMetadata['unassigned_athletes'] = $assignedAthletes;
+                    }
+
+                    recordActivity(
+                        $pdo,
+                        'booking_deleted',
+                        'booking',
+                        $bookingId,
+                        'Accommodation reservation deleted.',
+                        $activityMetadata,
+                        $actor['id'],
+                        $actor['role'],
+                        $actor['username'],
+                        formatTelegramActivityMessage('CAMS booking update', ['Action: delete booking', 'Delegation: ' . $actor['username'], 'Hotel: ' . ($bookingDetails['hotel_name'] ?? 'Unknown'), 'Room type: ' . ($bookingDetails['room_type_name'] ?? 'Unknown')])
+                    );
+                    $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi bi-trash me-1'></i>Reservation removed.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+                } catch (Throwable $exception) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+
+                    $msg = "<div class='alert alert-danger'>Unable to remove the reservation right now. Please try again.</div>";
+                }
             }
         }
     }
