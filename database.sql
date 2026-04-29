@@ -104,6 +104,12 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     CONSTRAINT fk_activity_logs_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+    setting_key VARCHAR(100) PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Room Assignments
 CREATE TABLE IF NOT EXISTS room_assignments (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -118,3 +124,14 @@ CREATE TABLE IF NOT EXISTS room_assignments (
 INSERT IGNORE INTO users (username, password, role, status) VALUES ('admin', '$2y$10$TzJaQ78Qxa8YHjTGwZazdexzPGIENiwkfIfhezgeFvEVCMVNCWl06', 'admin', 'active');
 -- Insert Default Country Manager (Password is 'usa123')
 INSERT IGNORE INTO users (username, password, role, status, country_name) VALUES ('usa', '$2y$10$ozllFh7PXvKC6396PGprX.pr1f9IUUCCZoEmVIIm4O/p2gzeDd1pO', 'country_manager', 'active', 'USA');
+
+INSERT INTO app_settings (setting_key, setting_value)
+VALUES
+    ('delegate_menu_dashboard_visible', '1'),
+    ('delegate_menu_athletes_visible', '1'),
+    ('delegate_menu_passport_visible', '1'),
+    ('delegate_menu_tshirt_visible', '1'),
+    ('delegate_menu_book_visible', '1'),
+    ('delegate_menu_rooming_visible', '1'),
+    ('delegate_menu_finance_visible', '1')
+ON DUPLICATE KEY UPDATE setting_value = setting_value;

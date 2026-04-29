@@ -1,5 +1,8 @@
 <?php
+require_once __DIR__ . '/../../includes/delegate_menu.php';
+
 $current_page = basename($_SERVER['PHP_SELF']);
+$delegateMenuItems = getDelegateMenuItems();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -130,13 +133,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
                 <div class="manager-only">
                     <h6 class="px-3 mb-2 text-muted small text-uppercase fw-bold">Delegation</h6>
-                    <a class="nav-link w-100 text-start <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
-                    <a class="nav-link w-100 text-start <?php echo $current_page == 'athletes.php' ? 'active' : ''; ?>" href="athletes.php"><i class="bi bi-people me-2"></i>Athletes &amp; Officials</a>
-                    <a class="nav-link w-100 text-start <?php echo $current_page == 'passport.php' ? 'active' : ''; ?>" href="passport.php"><i class="bi bi-passport me-2"></i>Passport Details</a>
-                    <a class="nav-link w-100 text-start <?php echo $current_page == 'tshirt.php' ? 'active' : ''; ?>" href="tshirt.php"><i class="bi bi-tag me-2"></i>T-Shirt Sizes</a>
-                    <a class="nav-link w-100 text-start <?php echo $current_page == 'book.php' ? 'active' : ''; ?>" href="book.php"><i class="bi bi-calendar-check me-2"></i>Book Accommodation</a>
-                    <a class="nav-link w-100 text-start <?php echo $current_page == 'rooming.php' ? 'active' : ''; ?>" href="rooming.php"><i class="bi bi-door-open me-2"></i>Room Grouping</a>
-                    <a class="nav-link w-100 text-start <?php echo $current_page == 'finance.php' ? 'active' : ''; ?>" href="finance.php"><i class="bi bi-receipt me-2"></i>Financial Summary</a>
+                    <?php foreach ($delegateMenuItems as $menuItem): ?>
+                        <?php if (!isset($pdo) || isAppSettingEnabled($pdo, $menuItem['setting_key'], true)): ?>
+                            <a class="nav-link w-100 text-start <?php echo $current_page == $menuItem['href'] ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($menuItem['href']); ?>"><i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i><?php echo htmlspecialchars($menuItem['label']); ?></a>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
                 </div>
             </div>
         </nav>

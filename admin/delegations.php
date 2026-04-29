@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/auth.php';
+require_once '../includes/delegate_menu.php';
 
 function fetchDelegationById(PDO $pdo, int $delegationId): ?array
 {
@@ -12,8 +13,36 @@ function fetchDelegationById(PDO $pdo, int $delegationId): ?array
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $actor = getActorDetailsFromSession();
+    $delegateMenuItems = getDelegateMenuItems();
 
-    if ($_POST['action'] === 'add_delegation') {
+    if ($_POST['action'] === 'toggle_delegate_menu_item') {
+        $menuItemKey = (string) ($_POST['menu_item_key'] ?? '');
+        $menuItem = $delegateMenuItems[$menuItemKey] ?? null;
+
+        if ($menuItem === null) {
+            $msg = "<div class='alert alert-warning alert-dismissible fade show'>Invalid delegate menu item.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        } else {
+            $settingKey = $menuItem['setting_key'];
+            $isVisible = isAppSettingEnabled($pdo, $settingKey, true);
+            $newValue = $isVisible ? '0' : '1';
+            setAppSetting($pdo, $settingKey, $newValue);
+
+            recordActivity(
+                $pdo,
+                $newValue === '1' ? 'delegate_menu_item_shown' : 'delegate_menu_item_hidden',
+                'app_setting',
+                null,
+                'Delegate menu item visibility updated.',
+                ['setting_key' => $settingKey, 'menu_item' => $menuItemKey, 'setting_value' => $newValue],
+                $actor['id'],
+                $actor['role'],
+                $actor['username'],
+                formatTelegramActivityMessage('CAMS delegate menu', ['Action: ' . ($newValue === '1' ? 'show menu item' : 'hide menu item'), 'By: ' . $actor['username'], 'Menu: ' . $menuItem['label']])
+            );
+
+            $msg = "<div class='alert alert-success alert-dismissible fade show'>" . htmlspecialchars($menuItem['label']) . " is now " . ($newValue === '1' ? 'visible' : 'hidden') . ".<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        }
+    } elseif ($_POST['action'] === 'add_delegation') {
         $username = trim($_POST['username'] ?? '');
         $country_name = trim($_POST['country_name'] ?? '');
         $password = $_POST['password'] ?? '';
@@ -141,6 +170,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
+$delegateMenuItems = getDelegateMenuItems();
+$delegateMenuStates = [];
+
+foreach ($delegateMenuItems as $menuItemKey => $menuItem) {
+    $delegateMenuStates[$menuItemKey] = isAppSettingEnabled($pdo, $menuItem['setting_key'], true);
+}
+
 $delegations_stmt = $pdo->query(
     "SELECT u.*, 
         (SELECT COUNT(*) FROM athletes WHERE country_id = u.id) AS athlete_count,
@@ -172,7 +208,54 @@ require_once 'includes/header.php';
 </div>
 
 <div class="row g-3 mb-3">
-    <div class="col-md-4">
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div>
+                    <div class="text-muted small text-uppercase fw-bold mb-2">Delegate Menu Items</div>
+                    <p class="text-muted small mb-3">Show or hide specific links in the country delegation sidebar without removing the sidebar itself.</p>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Menu Item</th>
+                                <th>Status</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($delegateMenuItems as $menuItemKey => $menuItem): ?>
+                                <?php $isVisible = $delegateMenuStates[$menuItemKey]; ?>
+                                <tr>
+                                    <td>
+                                        <i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i>
+                                        <?php echo htmlspecialchars($menuItem['label']); ?>
+                                    </td>
+                                    <td>
+                                        <span class="badge rounded-pill <?php echo $isVisible ? 'text-bg-success' : 'text-bg-secondary'; ?>">
+                                            <?php echo $isVisible ? 'Visible' : 'Hidden'; ?>
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <form method="POST" class="d-inline">
+                                            <input type="hidden" name="action" value="toggle_delegate_menu_item">
+                                            <input type="hidden" name="menu_item_key" value="<?php echo htmlspecialchars($menuItemKey); ?>">
+                                            <button type="submit" class="btn btn-sm <?php echo $isVisible ? 'btn-outline-secondary' : 'btn-outline-success'; ?>">
+                                                <i class="bi <?php echo $isVisible ? 'bi-eye-slash' : 'bi-eye'; ?> me-1"></i>
+                                                <?php echo $isVisible ? 'Hide' : 'Show'; ?>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
         <div class="card shadow-sm h-100">
             <div class="card-body">
                 <div class="text-muted small text-uppercase fw-bold mb-2">Total Delegations</div>
@@ -180,7 +263,7 @@ require_once 'includes/header.php';
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card shadow-sm h-100">
             <div class="card-body">
                 <div class="text-muted small text-uppercase fw-bold mb-2">Active Delegations</div>
@@ -188,7 +271,7 @@ require_once 'includes/header.php';
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card shadow-sm h-100">
             <div class="card-body">
                 <div class="text-muted small text-uppercase fw-bold mb-2">Suspended Delegations</div>

@@ -34,6 +34,63 @@ function ensureActivityLogTable(PDO $pdo): void
     );
 }
 
+function ensureAppSettingsTable(PDO $pdo): void
+{
+    static $appSettingsChecked = false;
+
+    if ($appSettingsChecked) {
+        return;
+    }
+
+    $appSettingsChecked = true;
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS app_settings (
+            setting_key VARCHAR(100) PRIMARY KEY,
+            setting_value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
+    $stmt = $pdo->prepare(
+        "INSERT INTO app_settings (setting_key, setting_value)
+        VALUES ('delegate_menu_visible', '1')
+        ON DUPLICATE KEY UPDATE setting_value = setting_value"
+    );
+    $stmt->execute();
+}
+
+function getAppSetting(PDO $pdo, string $key, ?string $default = null): ?string
+{
+    ensureAppSettingsTable($pdo);
+
+    $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = ? LIMIT 1");
+    $stmt->execute([$key]);
+    $value = $stmt->fetchColumn();
+
+    return $value === false ? $default : (string) $value;
+}
+
+function setAppSetting(PDO $pdo, string $key, string $value): void
+{
+    ensureAppSettingsTable($pdo);
+
+    $stmt = $pdo->prepare(
+        "INSERT INTO app_settings (setting_key, setting_value)
+        VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)"
+    );
+    $stmt->execute([$key, $value]);
+}
+
+function isAppSettingEnabled(PDO $pdo, string $key, bool $default = false): bool
+{
+    $defaultValue = $default ? '1' : '0';
+    $value = getAppSetting($pdo, $key, $defaultValue);
+
+    return in_array(strtolower((string) $value), ['1', 'true', 'yes', 'on'], true);
+}
+
 function ensureUserStatusColumn(PDO $pdo): void
 {
     static $statusChecked = false;
@@ -96,6 +153,7 @@ try {
     if (shouldAutoManageDatabaseSchema()) {
         ensureUserStatusColumn($pdo);
         ensureActivityLogTable($pdo);
+        ensureAppSettingsTable($pdo);
     }
 } catch(Exception $e) {
     error_log('Database connection failed: ' . json_encode([
