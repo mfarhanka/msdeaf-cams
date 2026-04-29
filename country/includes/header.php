@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../includes/delegate_menu.php';
 
 $current_page = basename($_SERVER['PHP_SELF']);
-$delegateMenuItems = getDelegateMenuItems();
+$delegateMenuItems = isset($pdo) ? getVisibleDelegateMenuItems($pdo) : getDelegateMenuItems();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -134,9 +134,7 @@ $delegateMenuItems = getDelegateMenuItems();
                 <div class="manager-only">
                     <h6 class="px-3 mb-2 text-muted small text-uppercase fw-bold">Delegation</h6>
                     <?php foreach ($delegateMenuItems as $menuItem): ?>
-                        <?php if (!isset($pdo) || isAppSettingEnabled($pdo, $menuItem['setting_key'], true)): ?>
-                            <a class="nav-link w-100 text-start <?php echo $current_page == $menuItem['href'] ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($menuItem['href']); ?>"><i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i><?php echo htmlspecialchars($menuItem['label']); ?></a>
-                        <?php endif; ?>
+                        <a class="nav-link w-100 text-start <?php echo $current_page == $menuItem['href'] ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($menuItem['href']); ?>"><i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i><?php echo htmlspecialchars($menuItem['label']); ?></a>
                     <?php endforeach; ?>
                 </div>
             </div>

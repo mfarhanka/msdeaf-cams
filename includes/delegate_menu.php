@@ -47,3 +47,29 @@ function getDelegateMenuItems(): array
         ],
     ];
 }
+
+function getVisibleDelegateMenuItems(PDO $pdo): array
+{
+    $visibleMenuItems = [];
+
+    foreach (getDelegateMenuItems() as $menuItemKey => $menuItem) {
+        if (isAppSettingEnabled($pdo, $menuItem['setting_key'], true)) {
+            $visibleMenuItems[$menuItemKey] = $menuItem;
+        }
+    }
+
+    return $visibleMenuItems;
+}
+
+function findDelegateMenuItemByHref(string $href): ?array
+{
+    foreach (getDelegateMenuItems() as $menuItemKey => $menuItem) {
+        if (($menuItem['href'] ?? '') === $href) {
+            $menuItem['menu_key'] = $menuItemKey;
+
+            return $menuItem;
+        }
+    }
+
+    return null;
+}
