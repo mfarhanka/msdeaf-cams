@@ -3,7 +3,7 @@ require_once 'includes/auth.php';
 
 function formatHotelStarRatingLabel(int $starRating): string
 {
-    return $starRating > 0 ? $starRating . '-star' : 'Unrated';
+    return $starRating > 0 ? str_repeat('⭐', $starRating) : 'Unrated';
 }
 
 // Handle POST actions for Hotels & Room Types

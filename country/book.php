@@ -6,7 +6,7 @@ $msg = '';
 
 function formatHotelStarRatingLabel(int $starRating): string
 {
-    return $starRating > 0 ? $starRating . '-star' : 'Unrated';
+    return $starRating > 0 ? str_repeat('⭐', $starRating) : 'Unrated';
 }
 
 function isHotelAvailableForChampionship(PDO $pdo, int $championshipId, int $hotelId): bool
@@ -462,7 +462,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var submitButton = form.querySelector('button[type="submit"]');
 
     function formatHotelStarRating(starRating) {
-        return Number(starRating) > 0 ? String(starRating) + '-star' : 'Unrated';
+        return Number(starRating) > 0 ? '⭐'.repeat(Number(starRating)) : 'Unrated';
     }
 
     function getAllowedRoomTypes(championshipId, hotelId) {
