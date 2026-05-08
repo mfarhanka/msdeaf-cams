@@ -17,6 +17,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($stmt->execute([$name, $address, $starRating])) {
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-hotel'></i> Hotel added successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
+    } elseif ($_POST['action'] === 'update_hotel_details') {
+        $id = (int) ($_POST['id'] ?? 0);
+        $name = trim($_POST['name'] ?? '');
+        $address = trim($_POST['address'] ?? '');
+
+        if ($id > 0 && $name !== '' && $address !== '') {
+            $stmt = $pdo->prepare("UPDATE hotels SET name = ?, address = ? WHERE id = ?");
+            if ($stmt->execute([$name, $address, $id])) {
+                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-pen'></i> Hotel details updated!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+            }
+        }
     } elseif ($_POST['action'] === 'update_hotel_star_rating') {
         $id = (int) ($_POST['id'] ?? 0);
         $starRating = max(0, min(5, (int) ($_POST['star_rating'] ?? 0)));
@@ -150,6 +161,9 @@ require_once 'includes/header.php';
                         </td>
                         <td><?php echo htmlspecialchars($h['calculated_total_rooms']); ?></td>
                         <td>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editHotelModal<?php echo (int) $h['id']; ?>">
+                                <i class="fas fa-pen"></i>
+                            </button>
                             <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this hotel?');">
                                 <input type="hidden" name="action" value="delete_hotel">
                                 <input type="hidden" name="id" value="<?php echo $h['id']; ?>">
@@ -160,6 +174,39 @@ require_once 'includes/header.php';
                     <?php endforeach; ?>
                 </tbody>
             </table>
+
+            <?php foreach ($hotels as $h): ?>
+            <div class="modal fade" id="editHotelModal<?php echo (int) $h['id']; ?>" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form method="POST">
+                            <div class="modal-header bg-primary text-white">
+                                <h5 class="modal-title">Edit Hotel</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" name="action" value="update_hotel_details">
+                                <input type="hidden" name="id" value="<?php echo (int) $h['id']; ?>">
+
+                                <div class="mb-3">
+                                    <label class="form-label text-muted fw-bold">Hotel Name</label>
+                                    <input type="text" name="name" class="form-control" value="<?php echo htmlspecialchars($h['name']); ?>" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label text-muted fw-bold">Complete Address</label>
+                                    <textarea name="address" class="form-control" rows="3" required><?php echo htmlspecialchars($h['address']); ?></textarea>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Hotel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
         <?php else: ?>
             <div class="alert alert-info text-center">No hotels found. Click "Add Hotel" to start.</div>
         <?php endif; ?>
