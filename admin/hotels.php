@@ -1,15 +1,29 @@
 <?php
 require_once 'includes/auth.php';
 
+function formatHotelStarRatingLabel(int $starRating): string
+{
+    return $starRating > 0 ? $starRating . '-star' : 'Unrated';
+}
+
 // Handle POST actions for Hotels & Room Types
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'add_hotel') {
         $name = trim($_POST['name']);
         $address = trim($_POST['address']);
+        $starRating = max(0, min(5, (int) ($_POST['star_rating'] ?? 0)));
         
-        $stmt = $pdo->prepare("INSERT INTO hotels (name, address, total_rooms) VALUES (?, ?, 0)");
-        if ($stmt->execute([$name, $address])) {
+        $stmt = $pdo->prepare("INSERT INTO hotels (name, address, star_rating, total_rooms) VALUES (?, ?, ?, 0)");
+        if ($stmt->execute([$name, $address, $starRating])) {
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-hotel'></i> Hotel added successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        }
+    } elseif ($_POST['action'] === 'update_hotel_star_rating') {
+        $id = (int) ($_POST['id'] ?? 0);
+        $starRating = max(0, min(5, (int) ($_POST['star_rating'] ?? 0)));
+
+        $stmt = $pdo->prepare("UPDATE hotels SET star_rating = ? WHERE id = ?");
+        if ($stmt->execute([$starRating, $id])) {
+            $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-star'></i> Hotel star rate updated!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
     } elseif ($_POST['action'] === 'delete_hotel') {
         $id = $_POST['id'];
@@ -48,10 +62,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // Fetch all hotels and dynamically calculate total rooms from room types
 $hotels_stmt = $pdo->query("
-    SELECT h.id, h.name, h.address, COALESCE(SUM(rt.total_allotment), 0) AS calculated_total_rooms 
+    SELECT h.id, h.name, h.address, h.star_rating, COALESCE(SUM(rt.total_allotment), 0) AS calculated_total_rooms 
     FROM hotels h 
     LEFT JOIN room_types rt ON h.id = rt.hotel_id 
-    GROUP BY h.id, h.name, h.address 
+    GROUP BY h.id, h.name, h.address, h.star_rating 
     ORDER BY h.id DESC
 ");
 $hotels = $hotels_stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -99,6 +113,7 @@ require_once 'includes/header.php';
                         <th>ID</th>
                         <th>Hotel Name</th>
                         <th>Address</th>
+                        <th>Star Rate</th>
                         <th>Total Rooms</th>
                         <th>Actions</th>
                     </tr>
@@ -109,6 +124,20 @@ require_once 'includes/header.php';
                         <td><?php echo htmlspecialchars($h['id']); ?></td>
                         <td class="fw-bold"><?php echo htmlspecialchars($h['name']); ?></td>
                         <td><?php echo htmlspecialchars($h['address']); ?></td>
+                        <td>
+                            <form method="POST" class="d-flex align-items-center gap-2">
+                                <input type="hidden" name="action" value="update_hotel_star_rating">
+                                <input type="hidden" name="id" value="<?php echo (int) $h['id']; ?>">
+                                <select name="star_rating" class="form-select form-select-sm" style="max-width: 110px;">
+                                    <?php for ($starOption = 0; $starOption <= 5; $starOption++): ?>
+                                        <option value="<?php echo $starOption; ?>" <?php echo (int) $h['star_rating'] === $starOption ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars(formatHotelStarRatingLabel($starOption)); ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+                            </form>
+                        </td>
                         <td><?php echo htmlspecialchars($h['calculated_total_rooms']); ?></td>
                         <td>
                             <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this hotel?');">
@@ -210,6 +239,15 @@ require_once 'includes/header.php';
                     <div class="mb-3">
                         <label class="form-label text-muted fw-bold">Complete Address</label>
                         <textarea name="address" class="form-control" rows="3" required></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-muted fw-bold">Star Rate</label>
+                        <select name="star_rating" class="form-select">
+                            <?php for ($starOption = 0; $starOption <= 5; $starOption++): ?>
+                                <option value="<?php echo $starOption; ?>"><?php echo htmlspecialchars(formatHotelStarRatingLabel($starOption)); ?></option>
+                            <?php endfor; ?>
+                        </select>
                     </div>
                 </div>
                 <div class="modal-footer">

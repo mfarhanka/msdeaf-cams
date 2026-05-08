@@ -4,6 +4,11 @@ require_once 'includes/auth.php';
 $countryId = $_SESSION['id'];
 $msg = '';
 
+function formatHotelStarRatingLabel(int $starRating): string
+{
+    return $starRating > 0 ? $starRating . '-star' : 'Unrated';
+}
+
 function isHotelAvailableForChampionship(PDO $pdo, int $championshipId, int $hotelId): bool
 {
     $mappingCountStmt = $pdo->prepare("SELECT COUNT(*) FROM championship_hotels WHERE championship_id = ?");
@@ -30,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($championshipId <= 0 || $roomTypeId <= 0 || $roomsRequested <= 0) {
             $msg = "<div class='alert alert-warning'>Please select a championship, room type, and number of rooms to reserve.</div>";
         } else {
-            $roomTypeStmt = $pdo->prepare("SELECT rt.id, rt.hotel_id, rt.name, rt.capacity, rt.total_allotment, h.name AS hotel_name
+            $roomTypeStmt = $pdo->prepare("SELECT rt.id, rt.hotel_id, rt.name, rt.capacity, rt.total_allotment, h.name AS hotel_name, h.star_rating AS hotel_star_rating
                 FROM room_types rt
                 JOIN hotels h ON h.id = rt.hotel_id
                 WHERE rt.id = ?");
@@ -187,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 $championships = $pdo->query("SELECT id, title, start_date, end_date FROM championships ORDER BY start_date ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-$roomTypesStmt = $pdo->prepare("SELECT rt.id, rt.hotel_id, rt.name, rt.capacity, rt.price_per_night, rt.total_allotment, h.name AS hotel_name,
+$roomTypesStmt = $pdo->prepare("SELECT rt.id, rt.hotel_id, rt.name, rt.capacity, rt.price_per_night, rt.total_allotment, h.name AS hotel_name, h.star_rating AS hotel_star_rating,
     COALESCE((SELECT SUM(b.rooms_reserved) FROM bookings b WHERE b.room_type_id = rt.id AND b.status <> 'Cancelled'), 0) AS reserved_rooms
     FROM room_types rt
     JOIN hotels h ON h.id = rt.hotel_id
@@ -213,6 +218,7 @@ foreach ($roomTypes as $roomType) {
         'id' => (int) $roomType['id'],
         'hotel_id' => (int) $roomType['hotel_id'],
         'hotel_name' => $roomType['hotel_name'],
+        'hotel_star_rating' => (int) $roomType['hotel_star_rating'],
         'room_type_name' => $roomType['name'],
         'capacity' => (int) $roomType['capacity'],
         'price_per_night' => (float) $roomType['price_per_night'],
@@ -224,7 +230,7 @@ foreach ($roomTypes as $roomType) {
 
 $reservationsStmt = $pdo->prepare("SELECT b.id, b.championship_id, b.room_type_id, b.rooms_reserved, b.status,
     c.title AS championship_title, c.start_date, c.end_date,
-    h.name AS hotel_name,
+    h.name AS hotel_name, h.star_rating AS hotel_star_rating,
     rt.name AS room_type_name, rt.capacity, rt.price_per_night,
     (SELECT COUNT(*) FROM room_assignments ra WHERE ra.booking_id = b.id) AS assigned_athletes,
     (SELECT COUNT(DISTINCT ra.room_number) FROM room_assignments ra WHERE ra.booking_id = b.id AND ra.room_number IS NOT NULL AND ra.room_number <> '') AS used_room_groups
@@ -329,7 +335,7 @@ require_once 'includes/header.php';
                                         </td>
                                         <td>
                                             <div class="fw-semibold"><?php echo htmlspecialchars($reservation['hotel_name']); ?></div>
-                                            <div class="small text-muted"><?php echo htmlspecialchars($reservation['room_type_name'] . ' (' . $capacity . ' pax/room)'); ?></div>
+                                            <div class="small text-muted"><?php echo htmlspecialchars(formatHotelStarRatingLabel((int) $reservation['hotel_star_rating']) . ' hotel / ' . $reservation['room_type_name'] . ' (' . $capacity . ' pax/room)'); ?></div>
                                         </td>
                                         <td>
                                             <div class="fw-semibold"><?php echo (int) $reservation['rooms_reserved']; ?> room(s)</div>
@@ -373,7 +379,7 @@ require_once 'includes/header.php';
                         <?php $availability = $reservationAvailability[(string) $roomType['id']]; ?>
                         <div class="mb-3 p-3 border rounded">
                             <div class="fw-semibold"><?php echo htmlspecialchars($availability['hotel_name']); ?> - <?php echo htmlspecialchars($availability['room_type_name']); ?></div>
-                            <div class="small text-muted mb-2">Capacity: <?php echo $availability['capacity']; ?> pax per room</div>
+                            <div class="small text-muted mb-2"><?php echo htmlspecialchars(formatHotelStarRatingLabel((int) $availability['hotel_star_rating'])); ?> hotel, capacity: <?php echo $availability['capacity']; ?> pax per room</div>
                             <div class="d-flex justify-content-between small">
                                 <span><?php echo $availability['available_rooms']; ?> room(s) left</span>
                                 <span>$<?php echo number_format($availability['price_per_night'], 2); ?>/pax/day</span>
@@ -455,6 +461,10 @@ document.addEventListener('DOMContentLoaded', function () {
     var summary = form.querySelector('.js-reservation-summary');
     var submitButton = form.querySelector('button[type="submit"]');
 
+    function formatHotelStarRating(starRating) {
+        return Number(starRating) > 0 ? String(starRating) + '-star' : 'Unrated';
+    }
+
     function getAllowedRoomTypes(championshipId, hotelId) {
         var mappedHotels = championshipHotelMap[String(championshipId)] || [];
         var hasMappedHotels = mappedHotels.length > 0;
@@ -488,7 +498,7 @@ document.addEventListener('DOMContentLoaded', function () {
             seenHotels[roomType.hotel_id] = true;
             var option = document.createElement('option');
             option.value = String(roomType.hotel_id);
-            option.textContent = roomType.hotel_name;
+            option.textContent = roomType.hotel_name + ' (' + formatHotelStarRating(roomType.hotel_star_rating) + ')';
             if (selectedHotelId && selectedHotelId === String(roomType.hotel_id)) {
                 option.selected = true;
             }
@@ -505,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function () {
         allowedRoomTypes.forEach(function (roomType) {
             var option = document.createElement('option');
             option.value = String(roomType.id);
-            option.textContent = roomType.hotel_name + ' / ' + roomType.room_type_name + ' - ' + roomType.available_rooms + ' room(s) available';
+            option.textContent = roomType.hotel_name + ' (' + formatHotelStarRating(roomType.hotel_star_rating) + ') / ' + roomType.room_type_name + ' - ' + roomType.available_rooms + ' room(s) available';
             if (selectedRoomTypeId && String(selectedRoomTypeId) === String(roomType.id)) {
                 option.selected = true;
             }
@@ -544,7 +554,7 @@ document.addEventListener('DOMContentLoaded', function () {
             '<div class="d-flex justify-content-between align-items-start gap-2 mb-2">' +
                 '<div>' +
                     '<div class="fw-semibold">' + selectedRoomType.hotel_name + ' / ' + selectedRoomType.room_type_name + '</div>' +
-                    '<div class="small text-muted">Capacity: ' + selectedRoomType.capacity + ' pax per room</div>' +
+                    '<div class="small text-muted">' + formatHotelStarRating(selectedRoomType.hotel_star_rating) + ' hotel, capacity: ' + selectedRoomType.capacity + ' pax per room</div>' +
                 '</div>' +
                 '<span class="badge text-bg-primary">Max ' + maximumReservable + ' room(s)</span>' +
             '</div>' +

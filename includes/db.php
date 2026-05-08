@@ -140,6 +140,46 @@ function ensureUserStatusColumn(PDO $pdo): void
     }
 }
 
+function ensureHotelStarRatingColumn(PDO $pdo): void
+{
+    static $starRatingChecked = false;
+
+    if ($starRatingChecked) {
+        return;
+    }
+
+    $starRatingChecked = true;
+
+    $tableExistsStmt = $pdo->query(
+        "SELECT COUNT(*)
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'hotels'"
+    );
+
+    if ((int) $tableExistsStmt->fetchColumn() === 0) {
+        return;
+    }
+
+    $columnStmt = $pdo->query(
+        "SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'hotels'"
+    );
+    $columns = $columnStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!in_array('star_rating', $columns, true)) {
+        try {
+            $pdo->exec("ALTER TABLE hotels ADD COLUMN star_rating TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER address");
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '42S21') {
+                throw $e;
+            }
+        }
+    }
+}
+
 try {
     $dbConfig = getDatabaseConfig();
     $host = $dbConfig['host'];
@@ -150,6 +190,7 @@ try {
 
     $pdo = new PDO(buildDatabaseDsn($dbConfig), $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    ensureHotelStarRatingColumn($pdo);
     if (shouldAutoManageDatabaseSchema()) {
         ensureUserStatusColumn($pdo);
         ensureActivityLogTable($pdo);
