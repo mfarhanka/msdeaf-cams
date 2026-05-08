@@ -44,6 +44,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $pdo->prepare("UPDATE hotels SET total_rooms = (SELECT COALESCE(SUM(total_allotment), 0) FROM room_types WHERE hotel_id = ?) WHERE id = ?")->execute([$hotel_id, $hotel_id]);
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-bed'></i> Room Type added!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
+    } elseif ($_POST['action'] === 'update_room_price') {
+        $id = (int) ($_POST['id'] ?? 0);
+        $pricePerNight = number_format((float) ($_POST['price_per_night'] ?? 0), 2, '.', '');
+
+        if ($id > 0 && (float) $pricePerNight >= 0) {
+            $stmt = $pdo->prepare("UPDATE room_types SET price_per_night = ? WHERE id = ?");
+            if ($stmt->execute([$pricePerNight, $id])) {
+                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-dollar-sign'></i> Room price updated!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+            }
+        }
     } elseif ($_POST['action'] === 'delete_room_type') {
         $id = $_POST['id'];
         // get hotel_id before deleting
@@ -200,7 +210,17 @@ require_once 'includes/header.php';
                         <td><?php echo htmlspecialchars($rt['hotel_name']); ?></td>
                         <td class="fw-bold"><?php echo htmlspecialchars($rt['name']); ?></td>
                         <td><?php echo htmlspecialchars($rt['capacity']); ?> Persons</td>
-                        <td class="text-success fw-bold">$<?php echo number_format($rt['price_per_night'], 2); ?></td>
+                        <td>
+                            <form method="POST" class="d-flex align-items-center gap-2 flex-wrap">
+                                <input type="hidden" name="action" value="update_room_price">
+                                <input type="hidden" name="id" value="<?php echo (int) $rt['id']; ?>">
+                                <div class="input-group input-group-sm" style="max-width: 180px;">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" step="0.01" min="0" name="price_per_night" class="form-control text-success fw-bold" value="<?php echo htmlspecialchars(number_format((float) $rt['price_per_night'], 2, '.', '')); ?>" required>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-outline-success">Save</button>
+                            </form>
+                        </td>
                         <td><?php echo htmlspecialchars($rt['total_allotment']); ?></td>
                         <td>
                             <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this room type?');">
