@@ -1,6 +1,23 @@
 <?php
 require_once 'includes/auth.php';
 
+$filterHotelId = isset($_GET['hotel_id']) ? (int) $_GET['hotel_id'] : 0;
+$filterRoomTypeId = isset($_GET['room_type_id']) ? (int) $_GET['room_type_id'] : 0;
+$detailConditions = ["b.status <> 'Cancelled'"];
+$detailParams = [];
+
+if ($filterHotelId > 0) {
+    $detailConditions[] = 'b.hotel_id = ?';
+    $detailParams[] = $filterHotelId;
+}
+
+if ($filterRoomTypeId > 0) {
+    $detailConditions[] = 'b.room_type_id = ?';
+    $detailParams[] = $filterRoomTypeId;
+}
+
+$detailWhereSql = implode(' AND ', $detailConditions);
+
 $countryTotalsStmt = $pdo->query("SELECT
     u.id AS country_id,
     u.country_name,
@@ -21,7 +38,7 @@ $countryTotalsStmt = $pdo->query("SELECT
     ORDER BY u.country_name ASC");
 $countryTotals = $countryTotalsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$detailStmt = $pdo->query("SELECT
+$detailStmt = $pdo->prepare("SELECT
     b.id,
     b.status,
     u.country_name,
@@ -44,8 +61,9 @@ $detailStmt = $pdo->query("SELECT
         FROM room_assignments
         GROUP BY booking_id
     ) assignment_totals ON assignment_totals.booking_id = b.id
-    WHERE b.status <> 'Cancelled'
+    WHERE {$detailWhereSql}
     ORDER BY c.start_date ASC, u.country_name ASC, h.name ASC, rt.name ASC");
+$detailStmt->execute($detailParams);
 $detailRows = $detailStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $grandTotal = 0;
@@ -67,6 +85,22 @@ require_once 'includes/header.php';
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Financial Report</h1>
 </div>
+
+<?php if ($filterHotelId > 0 || $filterRoomTypeId > 0): ?>
+    <div class="alert alert-info d-flex justify-content-between align-items-center" role="alert">
+        <div>
+            <i class="fas fa-filter"></i>
+            Showing filtered bookings
+            <?php if ($filterHotelId > 0): ?>
+                <span class="badge bg-primary ms-2">Hotel ID: <?php echo $filterHotelId; ?></span>
+            <?php endif; ?>
+            <?php if ($filterRoomTypeId > 0): ?>
+                <span class="badge bg-success ms-2">Room Type ID: <?php echo $filterRoomTypeId; ?></span>
+            <?php endif; ?>
+        </div>
+        <a href="finance.php" class="btn btn-sm btn-outline-secondary">Clear Filter</a>
+    </div>
+<?php endif; ?>
 
 <div class="row row-cols-1 row-cols-md-3 g-3 mb-3">
     <div class="col">

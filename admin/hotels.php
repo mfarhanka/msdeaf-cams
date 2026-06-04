@@ -30,10 +30,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
     } elseif ($_POST['action'] === 'delete_hotel') {
-        $id = $_POST['id'];
-        $stmt = $pdo->prepare("DELETE FROM hotels WHERE id=?");
-        if ($stmt->execute([$id])) {
-            $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-trash'></i> Hotel deleted!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        $id = (int) ($_POST['id'] ?? 0);
+
+        $bookingRefStmt = $pdo->prepare("SELECT COUNT(*) FROM bookings WHERE hotel_id = ?");
+        $bookingRefStmt->execute([$id]);
+        $bookingRefCount = (int) $bookingRefStmt->fetchColumn();
+
+        if ($bookingRefCount > 0) {
+            $viewBookingsUrl = 'finance.php?hotel_id=' . urlencode((string) $id);
+            $msg = "<div class='alert alert-danger alert-dismissible fade show'><i class='fas fa-exclamation-triangle'></i> Cannot delete hotel because it has existing booking records. <a href='" . htmlspecialchars($viewBookingsUrl) . "' class='alert-link'>View related bookings</a>.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        } else {
+            $stmt = $pdo->prepare("DELETE FROM hotels WHERE id=?");
+            if ($stmt->execute([$id])) {
+                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-trash'></i> Hotel deleted!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+            }
         }
     } elseif ($_POST['action'] === 'add_room_type') {
         $hotel_id = $_POST['hotel_id'];
@@ -59,17 +69,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
     } elseif ($_POST['action'] === 'delete_room_type') {
-        $id = $_POST['id'];
+        $id = (int) ($_POST['id'] ?? 0);
         // get hotel_id before deleting
         $h_stmt = $pdo->prepare("SELECT hotel_id FROM room_types WHERE id=?");
         $h_stmt->execute([$id]);
         $hotel_id = $h_stmt->fetchColumn();
 
-        $stmt = $pdo->prepare("DELETE FROM room_types WHERE id=?");
-        if ($stmt->execute([$id])) {
-            // Update actual hotel total_rooms column
-            $pdo->prepare("UPDATE hotels SET total_rooms = (SELECT COALESCE(SUM(total_allotment), 0) FROM room_types WHERE hotel_id = ?) WHERE id = ?")->execute([$hotel_id, $hotel_id]);
-            $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-trash'></i> Room type deleted!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        $bookingRefStmt = $pdo->prepare("SELECT COUNT(*) FROM bookings WHERE room_type_id = ?");
+        $bookingRefStmt->execute([$id]);
+        $bookingRefCount = (int) $bookingRefStmt->fetchColumn();
+
+        if ($bookingRefCount > 0) {
+            $viewBookingsUrl = 'finance.php?room_type_id=' . urlencode((string) $id);
+            $msg = "<div class='alert alert-danger alert-dismissible fade show'><i class='fas fa-exclamation-triangle'></i> Cannot delete room type because it is already used in bookings. <a href='" . htmlspecialchars($viewBookingsUrl) . "' class='alert-link'>View related bookings</a>.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        } else {
+            $stmt = $pdo->prepare("DELETE FROM room_types WHERE id=?");
+            if ($stmt->execute([$id])) {
+                // Update actual hotel total_rooms column
+                if ($hotel_id) {
+                    $pdo->prepare("UPDATE hotels SET total_rooms = (SELECT COALESCE(SUM(total_allotment), 0) FROM room_types WHERE hotel_id = ?) WHERE id = ?")->execute([$hotel_id, $hotel_id]);
+                }
+                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-trash'></i> Room type deleted!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+            }
         }
     }
 }
