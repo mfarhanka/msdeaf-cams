@@ -68,6 +68,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-dollar-sign'></i> Room price updated!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
             }
         }
+    } elseif ($_POST['action'] === 'update_room_type_details') {
+        $id = (int) ($_POST['id'] ?? 0);
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $capacity = (int) ($_POST['capacity'] ?? 0);
+        $pricePerNight = number_format((float) ($_POST['price_per_night'] ?? 0), 2, '.', '');
+        $totalAllotment = (int) ($_POST['total_allotment'] ?? 0);
+
+        if ($id > 0 && $name !== '' && $capacity > 0 && (float) $pricePerNight >= 0 && $totalAllotment > 0) {
+            $hotelStmt = $pdo->prepare("SELECT hotel_id FROM room_types WHERE id = ? LIMIT 1");
+            $hotelStmt->execute([$id]);
+            $hotelId = (int) $hotelStmt->fetchColumn();
+
+            if ($hotelId > 0) {
+                $stmt = $pdo->prepare("UPDATE room_types SET name = ?, capacity = ?, price_per_night = ?, total_allotment = ? WHERE id = ?");
+                if ($stmt->execute([$name, $capacity, $pricePerNight, $totalAllotment, $id])) {
+                    $pdo->prepare("UPDATE hotels SET total_rooms = (SELECT COALESCE(SUM(total_allotment), 0) FROM room_types WHERE hotel_id = ?) WHERE id = ?")->execute([$hotelId, $hotelId]);
+                    $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-pen'></i> Room type details updated!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+                }
+            }
+        }
     } elseif ($_POST['action'] === 'delete_room_type') {
         $id = (int) ($_POST['id'] ?? 0);
         // get hotel_id before deleting
@@ -269,19 +289,12 @@ require_once 'includes/header.php';
                         <td><?php echo htmlspecialchars($rt['hotel_name']); ?></td>
                         <td class="fw-bold"><?php echo htmlspecialchars($rt['name']); ?></td>
                         <td><?php echo htmlspecialchars($rt['capacity']); ?> Persons</td>
-                        <td>
-                            <form method="POST" class="d-flex align-items-center gap-2 flex-wrap">
-                                <input type="hidden" name="action" value="update_room_price">
-                                <input type="hidden" name="id" value="<?php echo (int) $rt['id']; ?>">
-                                <div class="input-group input-group-sm" style="max-width: 180px;">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" step="0.01" min="0" name="price_per_night" class="form-control text-success fw-bold" value="<?php echo htmlspecialchars(number_format((float) $rt['price_per_night'], 2, '.', '')); ?>" required>
-                                </div>
-                                <button type="submit" class="btn btn-sm btn-outline-success">Save</button>
-                            </form>
-                        </td>
+                        <td class="text-success fw-bold">$<?php echo htmlspecialchars(number_format((float) $rt['price_per_night'], 2, '.', '')); ?></td>
                         <td><?php echo htmlspecialchars($rt['total_allotment']); ?></td>
                         <td>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editRoomTypeModal<?php echo (int) $rt['id']; ?>">
+                                <i class="fas fa-pen"></i>
+                            </button>
                             <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this room type?');">
                                 <input type="hidden" name="action" value="delete_room_type">
                                 <input type="hidden" name="id" value="<?php echo $rt['id']; ?>">
@@ -292,6 +305,55 @@ require_once 'includes/header.php';
                     <?php endforeach; ?>
                 </tbody>
             </table>
+
+            <?php foreach ($room_types as $rt): ?>
+            <div class="modal fade" id="editRoomTypeModal<?php echo (int) $rt['id']; ?>" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form method="POST">
+                            <div class="modal-header bg-success text-white">
+                                <h5 class="modal-title">Edit Room Type</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" name="action" value="update_room_type_details">
+                                <input type="hidden" name="id" value="<?php echo (int) $rt['id']; ?>">
+
+                                <div class="mb-3">
+                                    <label class="form-label text-muted fw-bold">Hotel</label>
+                                    <input type="text" class="form-control" value="<?php echo htmlspecialchars($rt['hotel_name']); ?>" disabled>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label text-muted fw-bold">Room Type Name</label>
+                                    <input type="text" name="name" class="form-control" value="<?php echo htmlspecialchars($rt['name']); ?>" required>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label text-muted fw-bold">Capacity</label>
+                                        <input type="number" name="capacity" class="form-control" min="1" value="<?php echo (int) $rt['capacity']; ?>" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label text-muted fw-bold">Allotment</label>
+                                        <input type="number" name="total_allotment" class="form-control" min="1" value="<?php echo (int) $rt['total_allotment']; ?>" required>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label text-muted fw-bold">Price per Pax per Day ($)</label>
+                                    <input type="number" step="0.01" min="0" name="price_per_night" class="form-control" value="<?php echo htmlspecialchars(number_format((float) $rt['price_per_night'], 2, '.', '')); ?>" required>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Update Room Type</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
         <?php else: ?>
             <div class="alert alert-info text-center">No room types found for the selected hotel.</div>
         <?php endif; ?>
