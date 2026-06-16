@@ -23,7 +23,7 @@ $countryTotalsStmt = $pdo->query("SELECT
     u.country_name,
     COUNT(DISTINCT b.id) AS booking_count,
     COALESCE(SUM(COALESCE(assignment_totals.assigned_athletes, 0)), 0) AS assigned_pax,
-    COALESCE(SUM(COALESCE(assignment_totals.assigned_athletes, 0) * rt.price_per_night * (DATEDIFF(c.end_date, c.start_date) + 1)), 0) AS total_amount
+    COALESCE(SUM(COALESCE(b.rooms_reserved, 0) * COALESCE(rt.capacity, 1) * COALESCE(rt.price_per_night, 0) * (DATEDIFF(b.booking_end_date, b.booking_start_date) + 1)), 0) AS total_amount
     FROM users u
     LEFT JOIN bookings b ON b.country_id = u.id AND b.status <> 'Cancelled'
     LEFT JOIN championships c ON b.championship_id = c.id
@@ -41,6 +41,9 @@ $countryTotals = $countryTotalsStmt->fetchAll(PDO::FETCH_ASSOC);
 $detailStmt = $pdo->prepare("SELECT
     b.id,
     b.status,
+    b.rooms_reserved,
+    b.booking_start_date,
+    b.booking_end_date,
     u.country_name,
     c.title AS championship_title,
     c.start_date,
@@ -50,7 +53,7 @@ $detailStmt = $pdo->prepare("SELECT
     rt.capacity,
     rt.price_per_night,
     COALESCE(assignment_totals.assigned_athletes, 0) AS assigned_athletes,
-    (DATEDIFF(c.end_date, c.start_date) + 1) AS championship_days
+    (DATEDIFF(b.booking_end_date, b.booking_start_date) + 1) AS booking_days
     FROM bookings b
     JOIN users u ON u.id = b.country_id
     JOIN championships c ON c.id = b.championship_id
@@ -71,8 +74,9 @@ $totalAssignedPax = 0;
 $totalBookings = 0;
 
 foreach ($detailRows as &$detailRow) {
-    $detailRow['championship_days'] = max(1, intval($detailRow['championship_days']));
-    $detailRow['line_total'] = intval($detailRow['assigned_athletes']) * floatval($detailRow['price_per_night']) * $detailRow['championship_days'];
+    $detailRow['booking_days'] = max(1, intval($detailRow['booking_days']));
+    $detailRow['charged_pax'] = max(0, intval($detailRow['rooms_reserved'])) * max(1, intval($detailRow['capacity']));
+    $detailRow['line_total'] = $detailRow['charged_pax'] * floatval($detailRow['price_per_night']) * $detailRow['booking_days'];
     $grandTotal += $detailRow['line_total'];
     $totalAssignedPax += intval($detailRow['assigned_athletes']);
     $totalBookings++;
@@ -108,7 +112,7 @@ require_once 'includes/header.php';
             <div class="card-body">
                 <div class="text-muted small mb-1">Grand Total</div>
                 <div class="fs-4 fw-bold text-success">$<?php echo number_format($grandTotal, 2); ?></div>
-                <div class="small text-muted">Assigned pax x rate per pax per day x championship days</div>
+                <div class="small text-muted">Reserved rooms x room capacity x rate per pax per day x selected stay days</div>
             </div>
         </div>
     </div>
@@ -174,7 +178,9 @@ require_once 'includes/header.php';
                         <tr>
                             <th>Country</th>
                             <th>Championship</th>
+                            <th>Stay Dates</th>
                             <th>Hotel / Room Type</th>
+                            <th>Charged Pax</th>
                             <th>Assigned Pax</th>
                             <th>Days</th>
                             <th>Rate / Pax / Day</th>
@@ -190,11 +196,15 @@ require_once 'includes/header.php';
                                     <div class="small text-muted"><?php echo htmlspecialchars(date('M d, Y', strtotime($row['start_date'])) . ' - ' . date('M d, Y', strtotime($row['end_date']))); ?></div>
                                 </td>
                                 <td>
+                                    <div class="fw-semibold"><?php echo htmlspecialchars(date('M d, Y', strtotime($row['booking_start_date'])) . ' - ' . date('M d, Y', strtotime($row['booking_end_date']))); ?></div>
+                                </td>
+                                <td>
                                     <div class="fw-semibold"><?php echo htmlspecialchars($row['hotel_name']); ?></div>
                                     <div class="small text-muted"><?php echo htmlspecialchars($row['room_type_name'] . ' (' . $row['capacity'] . ' pax/room)'); ?></div>
                                 </td>
+                                <td><?php echo intval($row['charged_pax']); ?></td>
                                 <td><?php echo intval($row['assigned_athletes']); ?></td>
-                                <td><?php echo intval($row['championship_days']); ?></td>
+                                <td><?php echo intval($row['booking_days']); ?></td>
                                 <td>$<?php echo number_format($row['price_per_night'], 2); ?></td>
                                 <td class="fw-bold text-success">$<?php echo number_format($row['line_total'], 2); ?></td>
                             </tr>

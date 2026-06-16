@@ -127,7 +127,7 @@ $athletesStmt = $pdo->prepare("SELECT a.id, a.first_name, a.last_name, a.gender,
 $athletesStmt->execute([$countryId]);
 $athletes = $athletesStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$reservationsStmt = $pdo->prepare("SELECT b.id, b.rooms_reserved, c.title AS championship_title, c.start_date, c.end_date,
+$reservationsStmt = $pdo->prepare("SELECT b.id, b.rooms_reserved, c.title AS championship_title, b.booking_start_date AS start_date, b.booking_end_date AS end_date,
 	h.name AS hotel_name, rt.name AS room_type_name, rt.capacity, rt.price_per_night,
 	(SELECT COUNT(*) FROM room_assignments ra WHERE ra.booking_id = b.id) AS assigned_athletes,
 	(SELECT COUNT(DISTINCT ra.room_number) FROM room_assignments ra WHERE ra.booking_id = b.id AND ra.room_number IS NOT NULL AND ra.room_number <> '') AS used_room_groups
@@ -143,8 +143,8 @@ $reservations = $reservationsStmt->fetchAll(PDO::FETCH_ASSOC);
 $roomingRowsStmt = $pdo->prepare("SELECT
 	b.id AS booking_id,
 	c.title AS championship_title,
-	c.start_date,
-	c.end_date,
+	b.booking_start_date AS start_date,
+	b.booking_end_date AS end_date,
 	h.name AS hotel_name,
 	rt.name AS room_type_name,
 	rt.capacity,

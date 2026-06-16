@@ -11,15 +11,10 @@ $roomStmt = $pdo->prepare("SELECT COALESCE(SUM(rooms_reserved), 0) FROM bookings
 $roomStmt->execute([$countryId]);
 $roomsBooked = $roomStmt->fetchColumn();
 
-$balanceStmt = $pdo->prepare("SELECT COALESCE(SUM(assignment_totals.assigned_athletes * rt.price_per_night * (DATEDIFF(c.end_date, c.start_date) + 1)), 0)
+$balanceStmt = $pdo->prepare("SELECT COALESCE(SUM(b.rooms_reserved * rt.capacity * rt.price_per_night * (DATEDIFF(b.booking_end_date, b.booking_start_date) + 1)), 0)
     FROM bookings b
     JOIN championships c ON b.championship_id = c.id
     JOIN room_types rt ON b.room_type_id = rt.id
-    LEFT JOIN (
-        SELECT booking_id, COUNT(*) AS assigned_athletes
-        FROM room_assignments
-        GROUP BY booking_id
-    ) assignment_totals ON assignment_totals.booking_id = b.id
     WHERE b.country_id = ? AND b.status <> 'Cancelled'");
 $balanceStmt->execute([$countryId]);
 $balanceDue = $balanceStmt->fetchColumn();

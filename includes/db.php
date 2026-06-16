@@ -180,6 +180,66 @@ function ensureHotelStarRatingColumn(PDO $pdo): void
     }
 }
 
+function ensureBookingScheduleColumns(PDO $pdo): void
+{
+    static $bookingScheduleChecked = false;
+
+    if ($bookingScheduleChecked) {
+        return;
+    }
+
+    $bookingScheduleChecked = true;
+
+    $tableExistsStmt = $pdo->query(
+        "SELECT COUNT(*)
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'bookings'"
+    );
+
+    if ((int) $tableExistsStmt->fetchColumn() === 0) {
+        return;
+    }
+
+    $columnStmt = $pdo->query(
+        "SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'bookings'"
+    );
+    $columns = $columnStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!in_array('booking_start_date', $columns, true)) {
+        try {
+            $pdo->exec("ALTER TABLE bookings ADD COLUMN booking_start_date DATE NULL AFTER rooms_reserved");
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '42S21') {
+                throw $e;
+            }
+        }
+    }
+
+    if (!in_array('booking_end_date', $columns, true)) {
+        try {
+            $pdo->exec("ALTER TABLE bookings ADD COLUMN booking_end_date DATE NULL AFTER booking_start_date");
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '42S21') {
+                throw $e;
+            }
+        }
+    }
+
+    // Existing rows created before this migration inherit championship dates.
+    $pdo->exec(
+        "UPDATE bookings b
+        JOIN championships c ON c.id = b.championship_id
+        SET
+            b.booking_start_date = COALESCE(b.booking_start_date, c.start_date),
+            b.booking_end_date = COALESCE(b.booking_end_date, c.end_date)
+        WHERE b.booking_start_date IS NULL OR b.booking_end_date IS NULL"
+    );
+}
+
 try {
     $dbConfig = getDatabaseConfig();
     $host = $dbConfig['host'];
@@ -191,6 +251,7 @@ try {
     $pdo = new PDO(buildDatabaseDsn($dbConfig), $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     ensureHotelStarRatingColumn($pdo);
+    ensureBookingScheduleColumns($pdo);
     if (shouldAutoManageDatabaseSchema()) {
         ensureUserStatusColumn($pdo);
         ensureActivityLogTable($pdo);

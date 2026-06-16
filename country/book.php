@@ -28,13 +28,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $actor = getActorDetailsFromSession();
 
     if ($_POST['action'] === 'save_reservation') {
+        $bookingId = (int) ($_POST['booking_id'] ?? 0);
         $championshipId = (int) ($_POST['championship_id'] ?? 0);
         $roomTypeId = (int) ($_POST['room_type_id'] ?? 0);
         $roomsRequested = (int) ($_POST['rooms_reserved'] ?? 0);
+        $bookingStartDate = trim((string) ($_POST['booking_start_date'] ?? ''));
+        $bookingEndDate = trim((string) ($_POST['booking_end_date'] ?? ''));
 
-        if ($championshipId <= 0 || $roomTypeId <= 0 || $roomsRequested <= 0) {
-            $msg = "<div class='alert alert-warning'>Please select a championship, room type, and number of rooms to reserve.</div>";
+        if ($championshipId <= 0 || $roomTypeId <= 0 || $roomsRequested <= 0 || $bookingStartDate === '' || $bookingEndDate === '') {
+            $msg = "<div class='alert alert-warning'>Please select a championship, room type, stay date range, and number of rooms to reserve.</div>";
         } else {
+            $championshipStmt = $pdo->prepare("SELECT id, start_date, end_date FROM championships WHERE id = ? LIMIT 1");
+            $championshipStmt->execute([$championshipId]);
+            $championship = $championshipStmt->fetch(PDO::FETCH_ASSOC);
+
             $roomTypeStmt = $pdo->prepare("SELECT rt.id, rt.hotel_id, rt.name, rt.capacity, rt.total_allotment, h.name AS hotel_name, h.star_rating AS hotel_star_rating
                 FROM room_types rt
                 JOIN hotels h ON h.id = rt.hotel_id
@@ -42,79 +49,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $roomTypeStmt->execute([$roomTypeId]);
             $roomType = $roomTypeStmt->fetch(PDO::FETCH_ASSOC);
 
-            if (!$roomType) {
+            if (!$championship) {
+                $msg = "<div class='alert alert-danger'>Invalid championship selection.</div>";
+            } elseif (!$roomType) {
                 $msg = "<div class='alert alert-danger'>Invalid room type selection.</div>";
             } elseif (!isHotelAvailableForChampionship($pdo, $championshipId, (int) $roomType['hotel_id'])) {
                 $msg = "<div class='alert alert-warning'>The selected hotel is not available for this championship.</div>";
+            } elseif ($bookingStartDate > $bookingEndDate) {
+                $msg = "<div class='alert alert-warning'>Check-out date must be on or after check-in date.</div>";
+            } elseif ($bookingStartDate < $championship['start_date'] || $bookingEndDate > $championship['end_date']) {
+                $msg = "<div class='alert alert-warning'>Selected stay dates must be inside the championship date range.</div>";
             } else {
-                $bookingStmt = $pdo->prepare("SELECT b.id, b.rooms_reserved,
-                    (SELECT COUNT(*) FROM room_assignments ra WHERE ra.booking_id = b.id) AS assigned_athletes
-                    FROM bookings b
-                    WHERE b.country_id = ?
-                        AND b.championship_id = ?
-                        AND b.room_type_id = ?
-                        AND b.status <> 'Cancelled'
-                    ORDER BY b.id ASC
-                    LIMIT 1");
-                $bookingStmt->execute([$countryId, $championshipId, $roomTypeId]);
-                $existingBooking = $bookingStmt->fetch(PDO::FETCH_ASSOC);
+                $existingBooking = null;
+                if ($bookingId > 0) {
+                    $bookingStmt = $pdo->prepare("SELECT b.id, b.rooms_reserved,
+                        (SELECT COUNT(*) FROM room_assignments ra WHERE ra.booking_id = b.id) AS assigned_athletes
+                        FROM bookings b
+                        WHERE b.id = ?
+                            AND b.country_id = ?
+                            AND b.status <> 'Cancelled'
+                        LIMIT 1");
+                    $bookingStmt->execute([$bookingId, $countryId]);
+                    $existingBooking = $bookingStmt->fetch(PDO::FETCH_ASSOC);
+                }
 
-                $existingBookingId = $existingBooking ? (int) $existingBooking['id'] : 0;
-                $assignedAthletes = $existingBooking ? (int) $existingBooking['assigned_athletes'] : 0;
-                $capacity = max(1, (int) $roomType['capacity']);
-                $minimumRoomsRequired = $assignedAthletes > 0 ? (int) ceil($assignedAthletes / $capacity) : 0;
-
-                if ($roomsRequested < $minimumRoomsRequired) {
-                    $msg = "<div class='alert alert-warning'>You cannot reserve fewer than {$minimumRoomsRequired} room(s) while athletes are already assigned to this reservation.</div>";
+                if ($bookingId > 0 && !$existingBooking) {
+                    $msg = "<div class='alert alert-warning'>Reservation not found for editing.</div>";
                 } else {
-                    $reservedByOthersStmt = $pdo->prepare("SELECT COALESCE(SUM(rooms_reserved), 0)
+                    $existingBookingId = $existingBooking ? (int) $existingBooking['id'] : 0;
+                    $assignedAthletes = $existingBooking ? (int) $existingBooking['assigned_athletes'] : 0;
+                    $capacity = max(1, (int) $roomType['capacity']);
+                    $minimumRoomsRequired = $assignedAthletes > 0 ? (int) ceil($assignedAthletes / $capacity) : 0;
+
+                    if ($roomsRequested < $minimumRoomsRequired) {
+                        $msg = "<div class='alert alert-warning'>You cannot reserve fewer than {$minimumRoomsRequired} room(s) while athletes are already assigned to this reservation.</div>";
+                    } else {
+                        $reservedByOthersStmt = $pdo->prepare("SELECT COALESCE(SUM(rooms_reserved), 0)
                         FROM bookings
                         WHERE room_type_id = ?
                             AND status <> 'Cancelled'
+                            AND booking_start_date <= ?
+                            AND booking_end_date >= ?
                             AND (? = 0 OR id <> ?)");
-                    $reservedByOthersStmt->execute([$roomTypeId, $existingBookingId, $existingBookingId]);
-                    $reservedByOthers = (int) $reservedByOthersStmt->fetchColumn();
+                        $reservedByOthersStmt->execute([$roomTypeId, $bookingEndDate, $bookingStartDate, $existingBookingId, $existingBookingId]);
+                        $reservedByOthers = (int) $reservedByOthersStmt->fetchColumn();
 
-                    $maximumReservable = max(0, (int) $roomType['total_allotment'] - $reservedByOthers);
+                        $maximumReservable = max(0, (int) $roomType['total_allotment'] - $reservedByOthers);
 
-                    if ($roomsRequested > $maximumReservable) {
-                        $msg = "<div class='alert alert-warning'>Only {$maximumReservable} room(s) are currently available for this room type.</div>";
-                    } else {
-                        $bookingAction = $existingBooking ? 'booking_updated' : 'booking_created';
-
-                        if ($existingBooking) {
-                            $updateStmt = $pdo->prepare("UPDATE bookings SET hotel_id = ?, rooms_reserved = ?, status = 'Pending' WHERE id = ? AND country_id = ?");
-                            $updateStmt->execute([(int) $roomType['hotel_id'], $roomsRequested, $existingBookingId, $countryId]);
-                            recordActivity(
-                                $pdo,
-                                $bookingAction,
-                                'booking',
-                                $existingBookingId,
-                                'Accommodation reservation updated.',
-                                ['championship_id' => $championshipId, 'hotel_name' => $roomType['hotel_name'], 'room_type_id' => $roomTypeId, 'room_type_name' => $roomType['name'], 'rooms_reserved' => $roomsRequested],
-                                $actor['id'],
-                                $actor['role'],
-                                $actor['username'],
-                                formatTelegramActivityMessage('CAMS booking update', ['Action: update booking', 'Delegation: ' . $actor['username'], 'Hotel: ' . $roomType['hotel_name'], 'Room type: ' . $roomType['name'], 'Rooms: ' . $roomsRequested])
-                            );
-                            $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi bi-calendar-check me-1'></i>Reservation updated successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+                        if ($roomsRequested > $maximumReservable) {
+                            $msg = "<div class='alert alert-warning'>Only {$maximumReservable} room(s) are available for this room type on the selected dates.</div>";
                         } else {
-                            $insertStmt = $pdo->prepare("INSERT INTO bookings (championship_id, country_id, hotel_id, room_type_id, rooms_reserved, status) VALUES (?, ?, ?, ?, ?, 'Pending')");
-                            $insertStmt->execute([$championshipId, $countryId, (int) $roomType['hotel_id'], $roomTypeId, $roomsRequested]);
-                            $bookingId = (int) $pdo->lastInsertId();
-                            recordActivity(
-                                $pdo,
-                                $bookingAction,
-                                'booking',
-                                $bookingId,
-                                'Accommodation reservation created.',
-                                ['championship_id' => $championshipId, 'hotel_name' => $roomType['hotel_name'], 'room_type_id' => $roomTypeId, 'room_type_name' => $roomType['name'], 'rooms_reserved' => $roomsRequested],
-                                $actor['id'],
-                                $actor['role'],
-                                $actor['username'],
-                                formatTelegramActivityMessage('CAMS booking update', ['Action: create booking', 'Delegation: ' . $actor['username'], 'Hotel: ' . $roomType['hotel_name'], 'Room type: ' . $roomType['name'], 'Rooms: ' . $roomsRequested])
-                            );
-                            $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi bi-calendar-check me-1'></i>Reservation locked successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+                            $bookingAction = $existingBooking ? 'booking_updated' : 'booking_created';
+
+                            if ($existingBooking) {
+                                $updateStmt = $pdo->prepare("UPDATE bookings SET championship_id = ?, hotel_id = ?, room_type_id = ?, rooms_reserved = ?, booking_start_date = ?, booking_end_date = ?, status = 'Pending' WHERE id = ? AND country_id = ?");
+                                $updateStmt->execute([$championshipId, (int) $roomType['hotel_id'], $roomTypeId, $roomsRequested, $bookingStartDate, $bookingEndDate, $existingBookingId, $countryId]);
+                                recordActivity(
+                                    $pdo,
+                                    $bookingAction,
+                                    'booking',
+                                    $existingBookingId,
+                                    'Accommodation reservation updated.',
+                                    ['championship_id' => $championshipId, 'hotel_name' => $roomType['hotel_name'], 'room_type_id' => $roomTypeId, 'room_type_name' => $roomType['name'], 'rooms_reserved' => $roomsRequested, 'booking_start_date' => $bookingStartDate, 'booking_end_date' => $bookingEndDate],
+                                    $actor['id'],
+                                    $actor['role'],
+                                    $actor['username'],
+                                    formatTelegramActivityMessage('CAMS booking update', ['Action: update booking', 'Delegation: ' . $actor['username'], 'Hotel: ' . $roomType['hotel_name'], 'Room type: ' . $roomType['name'], 'Rooms: ' . $roomsRequested, 'Stay: ' . $bookingStartDate . ' to ' . $bookingEndDate])
+                                );
+                                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi bi-calendar-check me-1'></i>Reservation updated successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+                            } else {
+                                $insertStmt = $pdo->prepare("INSERT INTO bookings (championship_id, country_id, hotel_id, room_type_id, rooms_reserved, booking_start_date, booking_end_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending')");
+                                $insertStmt->execute([$championshipId, $countryId, (int) $roomType['hotel_id'], $roomTypeId, $roomsRequested, $bookingStartDate, $bookingEndDate]);
+                                $newBookingId = (int) $pdo->lastInsertId();
+                                recordActivity(
+                                    $pdo,
+                                    $bookingAction,
+                                    'booking',
+                                    $newBookingId,
+                                    'Accommodation reservation created.',
+                                    ['championship_id' => $championshipId, 'hotel_name' => $roomType['hotel_name'], 'room_type_id' => $roomTypeId, 'room_type_name' => $roomType['name'], 'rooms_reserved' => $roomsRequested, 'booking_start_date' => $bookingStartDate, 'booking_end_date' => $bookingEndDate],
+                                    $actor['id'],
+                                    $actor['role'],
+                                    $actor['username'],
+                                    formatTelegramActivityMessage('CAMS booking update', ['Action: create booking', 'Delegation: ' . $actor['username'], 'Hotel: ' . $roomType['hotel_name'], 'Room type: ' . $roomType['name'], 'Rooms: ' . $roomsRequested, 'Stay: ' . $bookingStartDate . ' to ' . $bookingEndDate])
+                                );
+                                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi bi-calendar-check me-1'></i>Reservation locked successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+                            }
                         }
                     }
                 }
@@ -191,9 +211,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 $championships = $pdo->query("SELECT id, title, start_date, end_date FROM championships ORDER BY start_date ASC")->fetchAll(PDO::FETCH_ASSOC);
+$championshipDateMap = [];
+foreach ($championships as $championship) {
+    $championshipDateMap[(string) $championship['id']] = [
+        'start_date' => $championship['start_date'],
+        'end_date' => $championship['end_date'],
+    ];
+}
 
-$roomTypesStmt = $pdo->prepare("SELECT rt.id, rt.hotel_id, rt.name, rt.capacity, rt.price_per_night, rt.total_allotment, h.name AS hotel_name, h.star_rating AS hotel_star_rating,
-    COALESCE((SELECT SUM(b.rooms_reserved) FROM bookings b WHERE b.room_type_id = rt.id AND b.status <> 'Cancelled'), 0) AS reserved_rooms
+$roomTypesStmt = $pdo->prepare("SELECT rt.id, rt.hotel_id, rt.name, rt.capacity, rt.price_per_night, rt.total_allotment, h.name AS hotel_name, h.star_rating AS hotel_star_rating
     FROM room_types rt
     JOIN hotels h ON h.id = rt.hotel_id
     ORDER BY h.name ASC, rt.name ASC");
@@ -212,8 +238,6 @@ foreach ($championshipHotelRows as $championshipHotelRow) {
 
 $reservationAvailability = [];
 foreach ($roomTypes as $roomType) {
-    $reservedRooms = (int) $roomType['reserved_rooms'];
-    $availableRooms = max(0, (int) $roomType['total_allotment'] - $reservedRooms);
     $reservationAvailability[(string) $roomType['id']] = [
         'id' => (int) $roomType['id'],
         'hotel_id' => (int) $roomType['hotel_id'],
@@ -223,13 +247,29 @@ foreach ($roomTypes as $roomType) {
         'capacity' => (int) $roomType['capacity'],
         'price_per_night' => (float) $roomType['price_per_night'],
         'total_allotment' => (int) $roomType['total_allotment'],
-        'reserved_rooms' => $reservedRooms,
-        'available_rooms' => $availableRooms,
+    ];
+}
+
+$activeBookingsStmt = $pdo->prepare("SELECT id, room_type_id, rooms_reserved,
+    booking_start_date,
+    booking_end_date
+    FROM bookings
+    WHERE status <> 'Cancelled'");
+$activeBookingsStmt->execute();
+$activeBookings = [];
+foreach ($activeBookingsStmt->fetchAll(PDO::FETCH_ASSOC) as $activeBookingRow) {
+    $activeBookings[] = [
+        'id' => (int) $activeBookingRow['id'],
+        'room_type_id' => (int) $activeBookingRow['room_type_id'],
+        'rooms_reserved' => (int) $activeBookingRow['rooms_reserved'],
+        'booking_start_date' => $activeBookingRow['booking_start_date'],
+        'booking_end_date' => $activeBookingRow['booking_end_date'],
     ];
 }
 
 $reservationsStmt = $pdo->prepare("SELECT b.id, b.championship_id, b.room_type_id, b.rooms_reserved, b.status,
-    c.title AS championship_title, c.start_date, c.end_date,
+    c.title AS championship_title, c.start_date AS championship_start_date, c.end_date AS championship_end_date,
+    b.booking_start_date, b.booking_end_date,
     h.name AS hotel_name, h.star_rating AS hotel_star_rating,
     rt.name AS room_type_name, rt.capacity, rt.price_per_night,
     (SELECT COUNT(*) FROM room_assignments ra WHERE ra.booking_id = b.id) AS assigned_athletes,
@@ -243,14 +283,8 @@ $reservationsStmt = $pdo->prepare("SELECT b.id, b.championship_id, b.room_type_i
 $reservationsStmt->execute([$countryId]);
 $reservations = $reservationsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$reservationMap = [];
 $totalReservedRooms = 0;
 foreach ($reservations as $reservation) {
-    $reservationMap[$reservation['championship_id'] . '|' . $reservation['room_type_id']] = [
-        'booking_id' => (int) $reservation['id'],
-        'rooms_reserved' => (int) $reservation['rooms_reserved'],
-        'assigned_athletes' => (int) $reservation['assigned_athletes'],
-    ];
     $totalReservedRooms += (int) $reservation['rooms_reserved'];
 }
 
@@ -315,9 +349,10 @@ require_once 'includes/header.php';
                                 <tr>
                                     <th>Championship</th>
                                     <th>Hotel / Room Type</th>
+                                    <th>Stay Dates</th>
                                     <th>Reserved</th>
                                     <th>Usage</th>
-                                    <th>Rate</th>
+                                    <th>Payable</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -325,17 +360,24 @@ require_once 'includes/header.php';
                                 <?php foreach ($reservations as $reservation): ?>
                                     <?php
                                         $capacity = max(1, (int) $reservation['capacity']);
+                                        $stayDays = max(1, (int) ((strtotime($reservation['booking_end_date']) - strtotime($reservation['booking_start_date'])) / 86400) + 1);
+                                        $chargeablePax = (int) $reservation['rooms_reserved'] * $capacity;
+                                        $lineAmount = $chargeablePax * (float) $reservation['price_per_night'] * $stayDays;
                                         $totalCapacity = (int) $reservation['rooms_reserved'] * $capacity;
                                         $remainingSlots = max(0, $totalCapacity - (int) $reservation['assigned_athletes']);
                                     ?>
                                     <tr>
                                         <td>
                                             <div class="fw-semibold"><?php echo htmlspecialchars($reservation['championship_title']); ?></div>
-                                            <div class="small text-muted"><?php echo htmlspecialchars(date('M d, Y', strtotime($reservation['start_date'])) . ' - ' . date('M d, Y', strtotime($reservation['end_date']))); ?></div>
+                                            <div class="small text-muted"><?php echo htmlspecialchars(date('M d, Y', strtotime($reservation['championship_start_date'])) . ' - ' . date('M d, Y', strtotime($reservation['championship_end_date']))); ?></div>
                                         </td>
                                         <td>
                                             <div class="fw-semibold"><?php echo htmlspecialchars($reservation['hotel_name']); ?></div>
                                             <div class="small text-muted"><?php echo htmlspecialchars(formatHotelStarRatingLabel((int) $reservation['hotel_star_rating']) . ' hotel / ' . $reservation['room_type_name'] . ' (' . $capacity . ' pax/room)'); ?></div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars(date('M d, Y', strtotime($reservation['booking_start_date'])) . ' - ' . date('M d, Y', strtotime($reservation['booking_end_date']))); ?></div>
+                                            <div class="small text-muted"><?php echo $stayDays; ?> day(s)</div>
                                         </td>
                                         <td>
                                             <div class="fw-semibold"><?php echo (int) $reservation['rooms_reserved']; ?> room(s)</div>
@@ -346,9 +388,12 @@ require_once 'includes/header.php';
                                             <div class="small text-muted">Used room groups: <?php echo (int) $reservation['used_room_groups']; ?></div>
                                             <div class="small text-muted">Remaining slots: <?php echo $remainingSlots; ?></div>
                                         </td>
-                                        <td>$<?php echo number_format((float) $reservation['price_per_night'], 2); ?>/pax/day</td>
                                         <td>
-                                            <button type="button" class="btn btn-sm btn-outline-primary js-edit-reservation" data-bs-toggle="modal" data-bs-target="#reservationModal" data-championship-id="<?php echo (int) $reservation['championship_id']; ?>" data-room-type-id="<?php echo (int) $reservation['room_type_id']; ?>" data-rooms-reserved="<?php echo (int) $reservation['rooms_reserved']; ?>">
+                                            <div class="fw-semibold text-success">$<?php echo number_format($lineAmount, 2); ?></div>
+                                            <div class="small text-muted">$<?php echo number_format((float) $reservation['price_per_night'], 2); ?>/pax/day x <?php echo $chargeablePax; ?> pax</div>
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-outline-primary js-edit-reservation" data-bs-toggle="modal" data-bs-target="#reservationModal" data-booking-id="<?php echo (int) $reservation['id']; ?>" data-championship-id="<?php echo (int) $reservation['championship_id']; ?>" data-room-type-id="<?php echo (int) $reservation['room_type_id']; ?>" data-booking-start-date="<?php echo htmlspecialchars($reservation['booking_start_date']); ?>" data-booking-end-date="<?php echo htmlspecialchars($reservation['booking_end_date']); ?>" data-rooms-reserved="<?php echo (int) $reservation['rooms_reserved']; ?>" data-assigned-athletes="<?php echo (int) $reservation['assigned_athletes']; ?>">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             <form method="POST" class="d-inline" onsubmit="return confirm('Remove this reservation?');">
@@ -373,7 +418,7 @@ require_once 'includes/header.php';
         <div class="card shadow-sm">
             <div class="card-body">
                 <h5 class="card-title mb-1">Availability Snapshot</h5>
-                <p class="text-muted small mb-3">Availability is locked by reserved rooms, not by assigned athletes.</p>
+                <p class="text-muted small mb-3">Actual availability is checked against overlapping selected dates when you save.</p>
                 <?php if (count($roomTypes) > 0): ?>
                     <?php foreach ($roomTypes as $roomType): ?>
                         <?php $availability = $reservationAvailability[(string) $roomType['id']]; ?>
@@ -381,7 +426,7 @@ require_once 'includes/header.php';
                             <div class="fw-semibold"><?php echo htmlspecialchars($availability['hotel_name']); ?> - <?php echo htmlspecialchars($availability['room_type_name']); ?></div>
                             <div class="small text-muted mb-2"><?php echo htmlspecialchars(formatHotelStarRatingLabel((int) $availability['hotel_star_rating'])); ?> hotel, capacity: <?php echo $availability['capacity']; ?> pax per room</div>
                             <div class="d-flex justify-content-between small">
-                                <span><?php echo $availability['available_rooms']; ?> room(s) left</span>
+                                <span><?php echo $availability['total_allotment']; ?> room(s) allotment</span>
                                 <span>$<?php echo number_format($availability['price_per_night'], 2); ?>/pax/day</span>
                             </div>
                         </div>
@@ -404,6 +449,7 @@ require_once 'includes/header.php';
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="action" value="save_reservation">
+                    <input type="hidden" name="booking_id" class="js-booking-id" value="0">
 
                     <div class="mb-3">
                         <label class="form-label">Select Championship</label>
@@ -429,10 +475,21 @@ require_once 'includes/header.php';
                         </select>
                     </div>
 
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Check-in Date</label>
+                            <input type="date" name="booking_start_date" class="form-control js-booking-start-date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Check-out Date</label>
+                            <input type="date" name="booking_end_date" class="form-control js-booking-end-date" required>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label">Rooms To Reserve</label>
                         <input type="number" name="rooms_reserved" class="form-control js-rooms-reserved-input" min="1" required>
-                        <div class="form-text">Reserve the number of room groups you want to lock for this championship and room type.</div>
+                        <div class="form-text">Reserve room groups. Payable amount uses room capacity x selected dates, even before assigning guests.</div>
                     </div>
 
                     <div class="border rounded p-3 bg-light-subtle js-reservation-summary text-muted small">
@@ -452,17 +509,47 @@ require_once 'includes/header.php';
 document.addEventListener('DOMContentLoaded', function () {
     var reservationAvailability = <?php echo json_encode(array_values($reservationAvailability), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
     var championshipHotelMap = <?php echo json_encode($championshipHotelMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
-    var reservationMap = <?php echo json_encode($reservationMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+    var championshipDateMap = <?php echo json_encode($championshipDateMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+    var activeBookings = <?php echo json_encode($activeBookings, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
     var form = document.getElementById('reservationForm');
+    var bookingIdInput = form.querySelector('.js-booking-id');
     var championshipSelect = form.querySelector('.js-championship-select');
     var hotelFilter = form.querySelector('.js-hotel-filter');
     var roomTypeSelect = form.querySelector('.js-room-type-select');
+    var bookingStartInput = form.querySelector('.js-booking-start-date');
+    var bookingEndInput = form.querySelector('.js-booking-end-date');
     var roomsInput = form.querySelector('.js-rooms-reserved-input');
     var summary = form.querySelector('.js-reservation-summary');
     var submitButton = form.querySelector('button[type="submit"]');
 
     function formatHotelStarRating(starRating) {
         return Number(starRating) > 0 ? '⭐'.repeat(Number(starRating)) : 'Unrated';
+    }
+
+    function formatMoney(value) {
+        return '$' + Number(value).toFixed(2);
+    }
+
+    function getDayCount(startDate, endDate) {
+        if (!startDate || !endDate) {
+            return 0;
+        }
+
+        var start = new Date(startDate + 'T00:00:00');
+        var end = new Date(endDate + 'T00:00:00');
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+            return 0;
+        }
+
+        return Math.floor((end - start) / 86400000) + 1;
+    }
+
+    function isOverlap(startA, endA, startB, endB) {
+        if (!startA || !endA || !startB || !endB) {
+            return false;
+        }
+
+        return startA <= endB && endA >= startB;
     }
 
     function getAllowedRoomTypes(championshipId, hotelId) {
@@ -515,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function () {
         allowedRoomTypes.forEach(function (roomType) {
             var option = document.createElement('option');
             option.value = String(roomType.id);
-            option.textContent = roomType.hotel_name + ' (' + formatHotelStarRating(roomType.hotel_star_rating) + ') / ' + roomType.room_type_name + ' - ' + roomType.available_rooms + ' room(s) available';
+            option.textContent = roomType.hotel_name + ' (' + formatHotelStarRating(roomType.hotel_star_rating) + ') / ' + roomType.room_type_name + ' - allotment: ' + roomType.total_allotment + ' room(s)';
             if (selectedRoomTypeId && String(selectedRoomTypeId) === String(roomType.id)) {
                 option.selected = true;
             }
@@ -523,6 +610,24 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         roomTypeSelect.disabled = roomTypeSelect.options.length === 1;
+    }
+
+    function syncDateLimits() {
+        var championshipDates = championshipDateMap[String(championshipSelect.value)] || null;
+
+        bookingStartInput.min = championshipDates ? championshipDates.start_date : '';
+        bookingStartInput.max = championshipDates ? championshipDates.end_date : '';
+        bookingEndInput.min = championshipDates ? championshipDates.start_date : '';
+        bookingEndInput.max = championshipDates ? championshipDates.end_date : '';
+
+        if (championshipDates) {
+            if (!bookingStartInput.value || bookingStartInput.value < championshipDates.start_date || bookingStartInput.value > championshipDates.end_date) {
+                bookingStartInput.value = championshipDates.start_date;
+            }
+            if (!bookingEndInput.value || bookingEndInput.value < championshipDates.start_date || bookingEndInput.value > championshipDates.end_date) {
+                bookingEndInput.value = championshipDates.end_date;
+            }
+        }
     }
 
     function renderSummary() {
@@ -533,21 +638,51 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        if (!championshipSelect.value || !selectedRoomType) {
+        if (!championshipSelect.value || !selectedRoomType || !bookingStartInput.value || !bookingEndInput.value) {
             summary.className = 'border rounded p-3 bg-light-subtle js-reservation-summary text-muted small';
-            summary.textContent = 'Select a championship and room type to review reservation availability.';
+            summary.textContent = 'Select championship, room type, and dates to review reservation availability and payable amount.';
             submitButton.disabled = true;
             return;
         }
 
-        var reservationKey = String(championshipSelect.value) + '|' + String(roomTypeSelect.value);
-        var existingReservation = reservationMap[reservationKey] || null;
-        var currentReserved = existingReservation ? existingReservation.rooms_reserved : 0;
-        var assignedAthletes = existingReservation ? existingReservation.assigned_athletes : 0;
-        var minimumRoomsRequired = assignedAthletes > 0 ? Math.ceil(assignedAthletes / Math.max(1, selectedRoomType.capacity)) : 0;
-        var maximumReservable = selectedRoomType.available_rooms + currentReserved;
+        var dayCount = getDayCount(bookingStartInput.value, bookingEndInput.value);
+        if (dayCount <= 0) {
+            summary.className = 'border rounded p-3 bg-light-subtle js-reservation-summary text-muted small';
+            summary.textContent = 'Invalid date range selected.';
+            submitButton.disabled = true;
+            return;
+        }
 
-        roomsInput.min = String(Math.max(1, minimumRoomsRequired));
+        var editingBookingId = Number(bookingIdInput.value || 0);
+        var assignedAthletes = Number(form.dataset.assignedAthletes || 0);
+        var minimumRoomsRequired = assignedAthletes > 0 ? Math.ceil(assignedAthletes / Math.max(1, selectedRoomType.capacity)) : 0;
+
+        var overlappingReserved = 0;
+        activeBookings.forEach(function (booking) {
+            if (Number(booking.room_type_id) !== Number(selectedRoomType.id)) {
+                return;
+            }
+
+            if (editingBookingId > 0 && Number(booking.id) === editingBookingId) {
+                return;
+            }
+
+            if (isOverlap(booking.booking_start_date, booking.booking_end_date, bookingStartInput.value, bookingEndInput.value)) {
+                overlappingReserved += Number(booking.rooms_reserved || 0);
+            }
+        });
+
+        var maximumReservable = Math.max(0, Number(selectedRoomType.total_allotment) - overlappingReserved);
+        var minimumBookable = Math.max(1, minimumRoomsRequired);
+        var roomValue = Number(roomsInput.value || 0);
+        var roomCountForEstimate = roomValue > 0 ? roomValue : 0;
+        var chargeablePaxEstimate = roomCountForEstimate * Number(selectedRoomType.capacity);
+        var estimatedAmount = chargeablePaxEstimate * Number(selectedRoomType.price_per_night) * dayCount;
+
+        roomsInput.min = String(minimumBookable);
+        if (roomsInput.value && Number(roomsInput.value) > maximumReservable) {
+            roomsInput.value = String(maximumReservable);
+        }
 
         summary.className = 'border rounded p-3 bg-light-subtle js-reservation-summary';
         summary.innerHTML =
@@ -559,14 +694,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 '<span class="badge text-bg-primary">Max ' + maximumReservable + ' room(s)</span>' +
             '</div>' +
             '<div class="row row-cols-2 g-2 small">' +
-                '<div class="col"><div class="border rounded p-2 bg-white">Rooms Left<br><strong>' + selectedRoomType.available_rooms + '</strong></div></div>' +
-                '<div class="col"><div class="border rounded p-2 bg-white">Locked Globally<br><strong>' + selectedRoomType.reserved_rooms + '</strong></div></div>' +
-                '<div class="col"><div class="border rounded p-2 bg-white">Your Current Hold<br><strong>' + currentReserved + '</strong></div></div>' +
+                '<div class="col"><div class="border rounded p-2 bg-white">Stay Duration<br><strong>' + dayCount + ' day(s)</strong></div></div>' +
+                '<div class="col"><div class="border rounded p-2 bg-white">Overlapping Reserved Rooms<br><strong>' + overlappingReserved + '</strong></div></div>' +
                 '<div class="col"><div class="border rounded p-2 bg-white">Min Needed For Assigned Athletes<br><strong>' + minimumRoomsRequired + '</strong></div></div>' +
+                '<div class="col"><div class="border rounded p-2 bg-white">Estimated Payable<br><strong>' + formatMoney(estimatedAmount) + '</strong></div></div>' +
             '</div>' +
-            '<div class="small text-muted mt-2">Assignments happen later on the room grouping page. This step only locks room inventory.</div>';
+            '<div class="small text-muted mt-2">Charging formula: reserved rooms x room capacity x rate per pax/day x selected days. Guest assignment can be done later on Room Grouping.</div>';
 
-        submitButton.disabled = false;
+        submitButton.disabled = maximumReservable < minimumBookable;
     }
 
     function syncReservationModal(selectedRoomTypeId) {
@@ -579,6 +714,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!form.dataset.editingReservation) {
             roomsInput.value = '';
         }
+        syncDateLimits();
         syncReservationModal(roomTypeSelect.value);
     });
 
@@ -597,11 +733,20 @@ document.addEventListener('DOMContentLoaded', function () {
         renderSummary();
     });
 
+    bookingStartInput.addEventListener('change', renderSummary);
+    bookingEndInput.addEventListener('change', renderSummary);
+    roomsInput.addEventListener('input', renderSummary);
+
     document.querySelectorAll('.js-edit-reservation').forEach(function (button) {
         button.addEventListener('click', function () {
             form.dataset.editingReservation = 'true';
+            bookingIdInput.value = button.getAttribute('data-booking-id') || '0';
+            form.dataset.assignedAthletes = button.getAttribute('data-assigned-athletes') || '0';
             championshipSelect.value = button.getAttribute('data-championship-id') || '';
+            bookingStartInput.value = button.getAttribute('data-booking-start-date') || '';
+            bookingEndInput.value = button.getAttribute('data-booking-end-date') || '';
             roomsInput.value = button.getAttribute('data-rooms-reserved') || '';
+            syncDateLimits();
             syncReservationModal(button.getAttribute('data-room-type-id') || '');
             roomTypeSelect.value = button.getAttribute('data-room-type-id') || '';
             renderSummary();
@@ -612,13 +757,17 @@ document.addEventListener('DOMContentLoaded', function () {
         var trigger = event.relatedTarget;
         if (!trigger || !trigger.classList.contains('js-edit-reservation')) {
             form.dataset.editingReservation = '';
+            form.dataset.assignedAthletes = '0';
             form.reset();
+            bookingIdInput.value = '0';
             hotelFilter.innerHTML = '<option value="">-- All Available Hotels --</option>';
             roomTypeSelect.innerHTML = '<option value="">-- Choose Room Type --</option>';
+            syncDateLimits();
             renderSummary();
         }
     });
 
+    syncDateLimits();
     renderSummary();
 });
 </script>

@@ -10,15 +10,18 @@ $roomsBooked = $roomStmt->fetchColumn();
 $financeStmt = $pdo->prepare("SELECT
     b.id,
     b.status,
+    b.rooms_reserved,
     c.title AS championship_title,
     c.start_date,
     c.end_date,
+    b.booking_start_date,
+    b.booking_end_date,
     h.name AS hotel_name,
     rt.name AS room_type_name,
     rt.capacity,
     rt.price_per_night,
     COALESCE(assignment_totals.assigned_athletes, 0) AS assigned_athletes,
-    (DATEDIFF(c.end_date, c.start_date) + 1) AS championship_days
+    (DATEDIFF(b.booking_end_date, b.booking_start_date) + 1) AS booking_days
     FROM bookings b
     JOIN championships c ON b.championship_id = c.id
     JOIN hotels h ON b.hotel_id = h.id
@@ -30,14 +33,15 @@ $financeStmt = $pdo->prepare("SELECT
     ) assignment_totals ON assignment_totals.booking_id = b.id
     WHERE b.country_id = ?
         AND b.status <> 'Cancelled'
-        AND COALESCE(assignment_totals.assigned_athletes, 0) > 0
     ORDER BY c.start_date ASC, h.name ASC, rt.name ASC");
 $financeStmt->execute([$countryId]);
 $financeRows = $financeStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $grandTotal = 0;
 foreach ($financeRows as &$financeRow) {
-    $lineTotal = intval($financeRow['assigned_athletes']) * floatval($financeRow['price_per_night']) * max(1, intval($financeRow['championship_days']));
+    $chargedPax = max(0, intval($financeRow['rooms_reserved'])) * max(1, intval($financeRow['capacity']));
+    $lineTotal = $chargedPax * floatval($financeRow['price_per_night']) * max(1, intval($financeRow['booking_days']));
+    $financeRow['charged_pax'] = $chargedPax;
     $financeRow['line_total'] = $lineTotal;
     $grandTotal += $lineTotal;
 }
@@ -73,7 +77,7 @@ require_once 'includes/header.php';
             <div class="card-body">
                 <div class="text-muted small mb-1">Total Amount</div>
                 <div class="fs-4 fw-bold text-success">$<?php echo number_format($grandTotal, 2); ?></div>
-                <div class="small text-muted">Calculated as assigned athletes x rate per pax per day x championship days</div>
+                <div class="small text-muted">Calculated as reserved rooms x room capacity x rate per pax per day x selected stay days</div>
             </div>
         </div>
     </div>
@@ -96,7 +100,9 @@ require_once 'includes/header.php';
                     <thead class="table-light">
                         <tr>
                             <th>Championship</th>
+                            <th>Stay Dates</th>
                             <th>Hotel / Room Type</th>
+                            <th>Charged Pax</th>
                             <th>Assigned Pax</th>
                             <th>Days</th>
                             <th>Rate / Pax / Day</th>
@@ -111,11 +117,15 @@ require_once 'includes/header.php';
                                     <div class="small text-muted"><?php echo htmlspecialchars(date('M d, Y', strtotime($row['start_date'])) . ' - ' . date('M d, Y', strtotime($row['end_date']))); ?></div>
                                 </td>
                                 <td>
+                                    <div class="fw-semibold"><?php echo htmlspecialchars(date('M d, Y', strtotime($row['booking_start_date'])) . ' - ' . date('M d, Y', strtotime($row['booking_end_date']))); ?></div>
+                                </td>
+                                <td>
                                     <div class="fw-semibold"><?php echo htmlspecialchars($row['hotel_name']); ?></div>
                                     <div class="small text-muted"><?php echo htmlspecialchars($row['room_type_name'] . ' (' . $row['capacity'] . ' pax/room)'); ?></div>
                                 </td>
+                                <td><?php echo intval($row['charged_pax']); ?></td>
                                 <td><?php echo intval($row['assigned_athletes']); ?></td>
-                                <td><?php echo max(1, intval($row['championship_days'])); ?></td>
+                                <td><?php echo max(1, intval($row['booking_days'])); ?></td>
                                 <td>$<?php echo number_format($row['price_per_night'], 2); ?></td>
                                 <td class="fw-bold text-success">$<?php echo number_format($row['line_total'], 2); ?></td>
                             </tr>
@@ -124,7 +134,7 @@ require_once 'includes/header.php';
                 </table>
             </div>
         <?php else: ?>
-            <p class="text-muted text-center py-5 mb-0">No assigned rooms yet, so there is no charge to calculate.</p>
+            <p class="text-muted text-center py-5 mb-0">No active reservations yet, so there is no charge to calculate.</p>
         <?php endif; ?>
     </div>
 </div>

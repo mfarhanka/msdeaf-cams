@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS bookings (
     hotel_id INT NOT NULL,
     room_type_id INT NOT NULL,
     rooms_reserved INT NOT NULL,
+    booking_start_date DATE NOT NULL,
+    booking_end_date DATE NOT NULL,
     status ENUM('Pending', 'Confirmed', 'Cancelled') DEFAULT 'Pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (championship_id) REFERENCES championships(id),

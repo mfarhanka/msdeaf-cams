@@ -117,20 +117,28 @@ function upsertAthlete(PDO $pdo, int $countryId, array $athlete): int
     return (int) $pdo->lastInsertId();
 }
 
-function upsertBooking(PDO $pdo, int $countryId, int $championshipId, int $hotelId, int $roomTypeId, int $roomsReserved, string $status): int
+function upsertBooking(PDO $pdo, int $countryId, int $championshipId, int $hotelId, int $roomTypeId, int $roomsReserved, string $status, ?string $bookingStartDate = null, ?string $bookingEndDate = null): int
 {
-    $stmt = $pdo->prepare("SELECT id FROM bookings WHERE country_id = ? AND championship_id = ? AND hotel_id = ? AND room_type_id = ? LIMIT 1");
-    $stmt->execute([$countryId, $championshipId, $hotelId, $roomTypeId]);
+    if ($bookingStartDate === null || $bookingEndDate === null) {
+        $championshipDateStmt = $pdo->prepare("SELECT start_date, end_date FROM championships WHERE id = ? LIMIT 1");
+        $championshipDateStmt->execute([$championshipId]);
+        $championshipDates = $championshipDateStmt->fetch(PDO::FETCH_ASSOC) ?: ['start_date' => date('Y-m-d'), 'end_date' => date('Y-m-d')];
+        $bookingStartDate = $bookingStartDate ?? $championshipDates['start_date'];
+        $bookingEndDate = $bookingEndDate ?? $championshipDates['end_date'];
+    }
+
+    $stmt = $pdo->prepare("SELECT id FROM bookings WHERE country_id = ? AND championship_id = ? AND hotel_id = ? AND room_type_id = ? AND booking_start_date = ? AND booking_end_date = ? LIMIT 1");
+    $stmt->execute([$countryId, $championshipId, $hotelId, $roomTypeId, $bookingStartDate, $bookingEndDate]);
     $bookingId = $stmt->fetchColumn();
 
     if ($bookingId) {
-        $updateStmt = $pdo->prepare("UPDATE bookings SET rooms_reserved = ?, status = ? WHERE id = ?");
-        $updateStmt->execute([$roomsReserved, $status, $bookingId]);
+        $updateStmt = $pdo->prepare("UPDATE bookings SET rooms_reserved = ?, booking_start_date = ?, booking_end_date = ?, status = ? WHERE id = ?");
+        $updateStmt->execute([$roomsReserved, $bookingStartDate, $bookingEndDate, $status, $bookingId]);
         return (int) $bookingId;
     }
 
-    $insertStmt = $pdo->prepare("INSERT INTO bookings (championship_id, country_id, hotel_id, room_type_id, rooms_reserved, status) VALUES (?, ?, ?, ?, ?, ?)");
-    $insertStmt->execute([$championshipId, $countryId, $hotelId, $roomTypeId, $roomsReserved, $status]);
+    $insertStmt = $pdo->prepare("INSERT INTO bookings (championship_id, country_id, hotel_id, room_type_id, rooms_reserved, booking_start_date, booking_end_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    $insertStmt->execute([$championshipId, $countryId, $hotelId, $roomTypeId, $roomsReserved, $bookingStartDate, $bookingEndDate, $status]);
     return (int) $pdo->lastInsertId();
 }
 
