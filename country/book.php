@@ -327,7 +327,7 @@ require_once 'includes/header.php';
 </div>
 
 <div class="row g-3">
-    <div class="col-lg-8">
+    <div class="col-lg-12">
         <div class="card shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
@@ -412,29 +412,6 @@ require_once 'includes/header.php';
         </div>
     </div>
 
-    <div class="col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h5 class="card-title mb-1">Availability Snapshot</h5>
-                <p class="text-muted small mb-3">Actual availability is checked against overlapping selected dates when you save.</p>
-                <?php if (count($roomTypes) > 0): ?>
-                    <?php foreach ($roomTypes as $roomType): ?>
-                        <?php $availability = $reservationAvailability[(string) $roomType['id']]; ?>
-                        <div class="mb-3 p-3 border rounded">
-                            <div class="fw-semibold"><?php echo htmlspecialchars($availability['hotel_name']); ?> - <?php echo htmlspecialchars($availability['room_type_name']); ?></div>
-                            <div class="small text-muted mb-2"><?php echo htmlspecialchars(formatHotelStarRatingLabel((int) $availability['hotel_star_rating'])); ?> hotel, capacity: <?php echo $availability['capacity']; ?> pax per room</div>
-                            <div class="d-flex justify-content-between small">
-                                <span><?php echo $availability['total_allotment']; ?> room(s) allotment</span>
-                                <span>$<?php echo number_format($availability['price_per_night'], 2); ?>/pax/day</span>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <p class="text-muted mb-0">No room types registered by admin yet.</p>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
 </div>
 
 <div class="modal fade" id="reservationModal" tabindex="-1">
@@ -471,6 +448,13 @@ require_once 'includes/header.php';
                         <select name="room_type_id" class="form-select js-room-type-select" required>
                             <option value="">-- Choose Room Type --</option>
                         </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label mb-1">Hotel Availability</label>
+                        <div class="border rounded p-3 bg-light-subtle small js-hotel-availability-list text-muted">
+                            Select championship and dates to view hotel availability.
+                        </div>
                     </div>
 
                     <div class="row g-3">
@@ -517,6 +501,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var bookingStartInput = form.querySelector('.js-booking-start-date');
     var bookingEndInput = form.querySelector('.js-booking-end-date');
     var roomsInput = form.querySelector('.js-rooms-reserved-input');
+    var hotelAvailabilityList = form.querySelector('.js-hotel-availability-list');
     var summary = form.querySelector('.js-reservation-summary');
     var submitButton = form.querySelector('button[type="submit"]');
 
@@ -651,6 +636,59 @@ document.addEventListener('DOMContentLoaded', function () {
         roomTypeSelect.disabled = roomTypeSelect.options.length === 1;
     }
 
+    function renderHotelAvailabilityList() {
+        var allowedRoomTypes = getAllowedRoomTypes(championshipSelect.value, hotelFilter.value);
+        var editingBookingId = Number(bookingIdInput.value || 0);
+        var hasValidDateRange = getDayCount(bookingStartInput.value, bookingEndInput.value) > 0;
+        var availabilityByHotel = {};
+
+        if (allowedRoomTypes.length === 0) {
+            hotelAvailabilityList.className = 'border rounded p-3 bg-light-subtle small js-hotel-availability-list text-muted';
+            hotelAvailabilityList.textContent = 'No hotels available for the selected filter.';
+            return;
+        }
+
+        allowedRoomTypes.forEach(function (roomType) {
+            var overlappingReserved = hasValidDateRange
+                ? getOverlappingReservedRooms(roomType.id, editingBookingId, bookingStartInput.value, bookingEndInput.value)
+                : 0;
+            var totalAllotment = Number(roomType.total_allotment || 0);
+            var availableRooms = Math.max(0, totalAllotment - overlappingReserved);
+
+            if (!availabilityByHotel[roomType.hotel_id]) {
+                availabilityByHotel[roomType.hotel_id] = {
+                    hotel_name: roomType.hotel_name,
+                    hotel_star_rating: roomType.hotel_star_rating,
+                    available: 0,
+                    total: 0
+                };
+            }
+
+            availabilityByHotel[roomType.hotel_id].available += availableRooms;
+            availabilityByHotel[roomType.hotel_id].total += totalAllotment;
+        });
+
+        var rows = Object.keys(availabilityByHotel).map(function (hotelId) {
+            return availabilityByHotel[hotelId];
+        });
+
+        rows.sort(function (a, b) {
+            return String(a.hotel_name).localeCompare(String(b.hotel_name));
+        });
+
+        hotelAvailabilityList.className = 'border rounded p-3 bg-light-subtle small js-hotel-availability-list';
+        hotelAvailabilityList.innerHTML = rows.map(function (hotel) {
+            return '<div class="d-flex justify-content-between align-items-center py-1 border-bottom">' +
+                '<div class="fw-semibold">' + hotel.hotel_name + ' <span class="text-muted fw-normal">(' + formatHotelStarRating(hotel.hotel_star_rating) + ')</span></div>' +
+                '<div class="text-nowrap">' + hotel.available + '/' + hotel.total + ' room(s)</div>' +
+            '</div>';
+        }).join('');
+
+        if (!hasValidDateRange) {
+            hotelAvailabilityList.innerHTML += '<div class="text-muted mt-2">Showing allotment totals. Select check-in/check-out dates for exact availability.</div>';
+        }
+    }
+
     function syncDateLimits() {
         var championshipDates = championshipDateMap[String(championshipSelect.value)] || null;
 
@@ -742,6 +780,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function syncReservationModal(selectedRoomTypeId) {
         renderHotelFilter(selectedRoomTypeId);
         renderRoomTypeOptions(selectedRoomTypeId);
+        renderHotelAvailabilityList();
         renderSummary();
     }
 
@@ -757,8 +796,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!form.dataset.editingReservation) {
             roomsInput.value = '1';
         }
-        renderRoomTypeOptions(roomTypeSelect.value);
-        renderSummary();
+        syncReservationModal(roomTypeSelect.value);
     });
 
     roomTypeSelect.addEventListener('change', function () {
@@ -769,12 +807,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     bookingStartInput.addEventListener('change', function () {
-        renderRoomTypeOptions(roomTypeSelect.value);
-        renderSummary();
+        syncReservationModal(roomTypeSelect.value);
     });
     bookingEndInput.addEventListener('change', function () {
-        renderRoomTypeOptions(roomTypeSelect.value);
-        renderSummary();
+        syncReservationModal(roomTypeSelect.value);
     });
     roomsInput.addEventListener('input', renderSummary);
 
@@ -805,12 +841,12 @@ document.addEventListener('DOMContentLoaded', function () {
             hotelFilter.innerHTML = '<option value="">-- All Available Hotels --</option>';
             roomTypeSelect.innerHTML = '<option value="">-- Choose Room Type --</option>';
             syncDateLimits();
-            renderSummary();
+            syncReservationModal('');
         }
     });
 
     syncDateLimits();
-    renderSummary();
+    syncReservationModal('');
 });
 </script>
 
