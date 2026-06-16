@@ -72,8 +72,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     } else {
                         $selectedOccupants = $roomOccupancy[$roomGrouping] ?? null;
                         $isCurrentRoomSelection = $currentRoomNumber !== '' && $currentRoomNumber === $roomGrouping;
+                        $isReservedRoomName = preg_match('/^Room\s+(\d+)$/', $roomGrouping, $roomMatch) === 1;
+                        $selectedRoomIndex = $isReservedRoomName ? (int) $roomMatch[1] : 0;
+                        $isEmptyReservedRoom = $isReservedRoomName
+                            && $selectedRoomIndex >= 1
+                            && $selectedRoomIndex <= $reservedRooms
+                            && $selectedOccupants === null;
 
-                        if ($selectedOccupants === null) {
+                        if ($selectedOccupants === null && !$isEmptyReservedRoom) {
                             $msg = "<div class='alert alert-warning'>The selected room group is no longer available.</div>";
                         } elseif ($selectedOccupants >= $capacity && !$isCurrentRoomSelection) {
                             $msg = "<div class='alert alert-warning'>The selected room group is already full.</div>";
@@ -125,7 +131,7 @@ $athletesStmt = $pdo->prepare("SELECT a.id, a.first_name, a.last_name, a.gender,
 $athletesStmt->execute([$countryId]);
 $athletes = $athletesStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$reservationsStmt = $pdo->prepare("SELECT b.id, b.rooms_reserved, c.title AS championship_title,
+$reservationsStmt = $pdo->prepare("SELECT b.id, b.rooms_reserved, b.booking_start_date, b.booking_end_date, c.title AS championship_title,
     h.name AS hotel_name, rt.name AS room_type_name, rt.capacity, rt.price_per_night,
     (SELECT COUNT(*) FROM room_assignments ra WHERE ra.booking_id = b.id) AS assigned_athletes,
     (SELECT COUNT(DISTINCT ra.room_number) FROM room_assignments ra WHERE ra.booking_id = b.id AND ra.room_number IS NOT NULL AND ra.room_number <> '') AS used_room_groups
@@ -225,17 +231,45 @@ foreach ($reservations as $reservation) {
     ];
 }
 
-$athleteOptions = [];
+$roomCards = [];
+foreach ($reservations as $reservation) {
+    $bookingId = (int) $reservation['id'];
+    $capacity = max(1, (int) $reservation['capacity']);
+
+    for ($roomIndex = 1; $roomIndex <= (int) $reservation['rooms_reserved']; $roomIndex++) {
+        $roomNumber = 'Room ' . $roomIndex;
+        $roomKey = $bookingId . '|' . $roomNumber;
+        $occupants = [];
+
+        if (isset($roomGroups[$roomKey])) {
+            $occupants = $roomGroups[$roomKey]['occupants'];
+        }
+
+        $roomCards[] = [
+            'booking_id' => $bookingId,
+            'room_number' => $roomNumber,
+            'championship_title' => $reservation['championship_title'],
+            'booking_start_date' => $reservation['booking_start_date'],
+            'booking_end_date' => $reservation['booking_end_date'],
+            'hotel_name' => $reservation['hotel_name'],
+            'room_type_name' => $reservation['room_type_name'],
+            'capacity' => $capacity,
+            'occupants' => $occupants,
+            'is_full' => count($occupants) >= $capacity,
+        ];
+    }
+}
+
+$unassignedAthletes = [];
 foreach ($athletes as $athlete) {
-    $athleteOptions[] = [
+    if (!empty($athlete['booking_id']) || !empty($athlete['room_number'])) {
+        continue;
+    }
+
+    $unassignedAthletes[] = [
         'id' => (int) $athlete['id'],
         'name' => trim((string) $athlete['first_name'] . ' ' . (string) $athlete['last_name']),
         'gender' => (string) $athlete['gender'],
-        'booking_id' => isset($athlete['booking_id']) ? (int) $athlete['booking_id'] : 0,
-        'room_number' => (string) ($athlete['room_number'] ?? ''),
-        'championship_title' => (string) ($athlete['championship_title'] ?? ''),
-        'hotel_name' => (string) ($athlete['hotel_name'] ?? ''),
-        'room_type_name' => (string) ($athlete['room_type_name'] ?? ''),
     ];
 }
 
@@ -245,7 +279,7 @@ require_once 'includes/header.php';
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <div>
         <h1 class="h2 mb-1">Room Grouping</h1>
-        <p class="text-muted mb-0">Simple flow: select delegate, choose room, and review names in that room.</p>
+        <p class="text-muted mb-0">All booked rooms are shown below. Pick an unassigned delegate inside each room box.</p>
     </div>
     <a href="book.php" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-calendar-check me-1"></i> Manage Reservations
@@ -253,70 +287,34 @@ require_once 'includes/header.php';
 </div>
 
 <div class="row g-3 mb-3">
-    <div class="col-lg-7">
+    <div class="col-lg-4">
         <div class="card shadow-sm h-100">
             <div class="card-body">
-                <h5 class="card-title mb-3">Assign Delegate to Room Group</h5>
-                <?php if (count($athletes) > 0 && count($reservationOptions) > 0): ?>
-                    <form method="POST" id="quickRoomingForm">
-                        <input type="hidden" name="action" value="assign_room">
-
-                        <div class="mb-3">
-                            <label for="athleteSelect" class="form-label">1) Select Delegate</label>
-                            <select id="athleteSelect" name="athlete_id" class="form-select" required>
-                                <option value="">-- Select Delegate --</option>
-                            </select>
-                        </div>
-
-                        <div id="currentAssignmentBox" class="border rounded p-3 bg-light-subtle mb-3 text-muted small">
-                            Select a delegate to view current room assignment and roommate list.
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="bookingSelect" class="form-label">2) Select Reservation</label>
-                            <select id="bookingSelect" name="booking_id" class="form-select" required>
-                                <option value="">-- Select Reserved Booking --</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="roomGroupingSelect" class="form-label">3) Select Room Group</label>
-                            <select id="roomGroupingSelect" name="room_grouping" class="form-select" required disabled>
-                                <option value="">-- Select Room Group --</option>
-                            </select>
-                        </div>
-
-                        <div id="selectedGroupPreview" class="border rounded p-3 mb-3">
-                            <div class="fw-semibold mb-2">Selected Room Group</div>
-                            <p class="text-muted small mb-0">Choose a reservation and room group to view names in that room.</p>
-                        </div>
-
-                        <button type="submit" id="saveAssignmentButton" class="btn btn-primary" disabled>
-                            <i class="bi bi-check-circle me-1"></i> Save Assignment
-                        </button>
-                    </form>
-
-                    <form method="POST" id="unassignForm" class="mt-2">
-                        <input type="hidden" name="action" value="unassign_room">
-                        <input type="hidden" name="athlete_id" id="unassignAthleteId" value="">
-                        <button type="submit" id="unassignButton" class="btn btn-outline-danger btn-sm" disabled onclick="return confirm('Unassign this delegate from room grouping?');">
-                            <i class="bi bi-x-circle me-1"></i> Unassign Selected Delegate
-                        </button>
-                    </form>
+                <h5 class="card-title mb-2">Available Delegates</h5>
+                <p class="text-muted small mb-3">Once assigned to a room, a delegate disappears from all other room selection lists.</p>
+                <?php if (count($unassignedAthletes) > 0): ?>
+                    <div class="d-grid gap-2">
+                        <?php foreach ($unassignedAthletes as $athlete): ?>
+                            <div class="border rounded p-2 d-flex justify-content-between align-items-center">
+                                <span><?php echo htmlspecialchars($athlete['name']); ?></span>
+                                <span class="text-muted small"><?php echo htmlspecialchars($athlete['gender']); ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 <?php elseif (count($athletes) === 0): ?>
                     <p class="text-muted mb-0">No delegates found. Add delegates first in Athletes & Officials.</p>
                 <?php else: ?>
-                    <p class="text-muted mb-0">No reserved rooms found. Reserve rooms first on the booking page.</p>
+                    <p class="text-muted mb-0">All delegates are already assigned to rooms.</p>
                 <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <div class="col-lg-5">
+    <div class="col-lg-8">
         <div class="card shadow-sm h-100">
             <div class="card-body">
-                <h5 class="card-title mb-1">Reservation Snapshot</h5>
-                <p class="text-muted small mb-3">Quick reference for remaining slots.</p>
+                <h5 class="card-title mb-1">Booking Snapshot</h5>
+                <p class="text-muted small mb-3">Quick reference for room inventory and remaining slots.</p>
                 <?php if (count($reservationOptions) > 0): ?>
                     <div class="d-grid gap-2">
                         <?php foreach ($reservationOptions as $reservationOption): ?>
@@ -337,260 +335,78 @@ require_once 'includes/header.php';
 
 <div class="card shadow-sm">
     <div class="card-body">
-        <h5 class="card-title mb-3">Current Room Groups</h5>
-        <?php if (count($roomGroups) > 0): ?>
+        <h5 class="card-title mb-3">Booked Rooms</h5>
+        <?php if (count($roomCards) > 0): ?>
             <div class="row g-3">
-                <?php foreach ($roomGroups as $roomGroup): ?>
+                <?php foreach ($roomCards as $roomCard): ?>
                     <div class="col-lg-6">
                         <div class="border rounded p-3 h-100">
                             <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                                 <div>
-                                    <div class="fw-semibold"><?php echo htmlspecialchars($roomGroup['hotel_name']); ?> - <?php echo htmlspecialchars($roomGroup['room_number']); ?></div>
-                                    <div class="small text-muted"><?php echo htmlspecialchars($roomGroup['room_type_name']); ?> (<?php echo (int) $roomGroup['capacity']; ?> pax/room)</div>
+                                    <div class="fw-semibold"><?php echo htmlspecialchars($roomCard['hotel_name']); ?> - <?php echo htmlspecialchars($roomCard['room_number']); ?></div>
+                                    <div class="small text-muted"><?php echo htmlspecialchars($roomCard['room_type_name']); ?> (<?php echo (int) $roomCard['capacity']; ?> pax/room)</div>
                                 </div>
-                                <span class="badge text-bg-primary"><?php echo count($roomGroup['occupants']); ?> / <?php echo (int) $roomGroup['capacity']; ?> Pax</span>
+                                <span class="badge <?php echo $roomCard['is_full'] ? 'text-bg-danger' : 'text-bg-primary'; ?>"><?php echo count($roomCard['occupants']); ?> / <?php echo (int) $roomCard['capacity']; ?> Pax</span>
                             </div>
-                            <div class="small text-muted mb-2"><?php echo htmlspecialchars($roomGroup['championship_title']); ?></div>
-                            <ul class="list-group list-group-flush">
-                                <?php foreach ($roomGroup['occupants'] as $occupant): ?>
-                                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
-                                        <span><?php echo htmlspecialchars($occupant['name']); ?></span>
-                                        <span class="text-muted small"><?php echo htmlspecialchars($occupant['gender']); ?></span>
-                                    </li>
-                                <?php endforeach; ?>
-                            </ul>
+                            <div class="small text-muted"><?php echo htmlspecialchars($roomCard['championship_title']); ?></div>
+                            <div class="small text-muted mb-3">Booked stay: <?php echo htmlspecialchars(date('M d, Y', strtotime($roomCard['booking_start_date'])) . ' - ' . date('M d, Y', strtotime($roomCard['booking_end_date']))); ?></div>
+
+                            <div class="small fw-semibold mb-2">Assigned Delegates</div>
+                            <?php if (count($roomCard['occupants']) > 0): ?>
+                                <ul class="list-group list-group-flush mb-3">
+                                    <?php foreach ($roomCard['occupants'] as $occupant): ?>
+                                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-2">
+                                            <div>
+                                                <div><?php echo htmlspecialchars($occupant['name']); ?></div>
+                                                <div class="text-muted small"><?php echo htmlspecialchars($occupant['gender']); ?></div>
+                                            </div>
+                                            <form method="POST" onsubmit="return confirm('Unassign this delegate from <?php echo htmlspecialchars($roomCard['room_number']); ?>?');">
+                                                <input type="hidden" name="action" value="unassign_room">
+                                                <input type="hidden" name="athlete_id" value="<?php echo (int) $occupant['athlete_id']; ?>">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm">Remove</button>
+                                            </form>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php else: ?>
+                                <p class="text-muted small mb-3">No delegates assigned to this room yet.</p>
+                            <?php endif; ?>
+
+                            <?php if (!$roomCard['is_full']): ?>
+                                <form method="POST">
+                                    <input type="hidden" name="action" value="assign_room">
+                                    <input type="hidden" name="booking_id" value="<?php echo (int) $roomCard['booking_id']; ?>">
+                                    <input type="hidden" name="room_grouping" value="<?php echo htmlspecialchars($roomCard['room_number']); ?>">
+
+                                    <label class="form-label small fw-semibold" for="delegate-<?php echo (int) $roomCard['booking_id']; ?>-<?php echo (int) preg_replace('/\D+/', '', $roomCard['room_number']); ?>">Add Delegate</label>
+                                    <div class="d-flex gap-2">
+                                        <select
+                                            class="form-select form-select-sm"
+                                            id="delegate-<?php echo (int) $roomCard['booking_id']; ?>-<?php echo (int) preg_replace('/\D+/', '', $roomCard['room_number']); ?>"
+                                            name="athlete_id"
+                                            <?php echo count($unassignedAthletes) === 0 ? 'disabled' : ''; ?>
+                                            required
+                                        >
+                                            <option value="">-- Select Unassigned Delegate --</option>
+                                            <?php foreach ($unassignedAthletes as $athlete): ?>
+                                                <option value="<?php echo (int) $athlete['id']; ?>"><?php echo htmlspecialchars($athlete['name'] . ' (' . $athlete['gender'] . ')'); ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <button type="submit" class="btn btn-primary btn-sm" <?php echo count($unassignedAthletes) === 0 ? 'disabled' : ''; ?>>Assign</button>
+                                    </div>
+                                </form>
+                            <?php else: ?>
+                                <div class="small text-danger fw-semibold">This room is full.</div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
             </div>
         <?php else: ?>
-            <p class="text-muted text-center py-4 mb-0">No room groups available yet. Reserve rooms and then assign delegates.</p>
+            <p class="text-muted text-center py-4 mb-0">No booked rooms available yet. Reserve rooms first on the booking page.</p>
         <?php endif; ?>
     </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var athletes = <?php echo json_encode($athleteOptions, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
-    var reservationOptions = <?php echo json_encode($reservationOptions, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
-    var roomGroupPreview = <?php echo json_encode($roomGroupPreview, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
-
-    var form = document.getElementById('quickRoomingForm');
-    if (!form) {
-        return;
-    }
-
-    var athleteSelect = document.getElementById('athleteSelect');
-    var bookingSelect = document.getElementById('bookingSelect');
-    var roomGroupingSelect = document.getElementById('roomGroupingSelect');
-    var currentAssignmentBox = document.getElementById('currentAssignmentBox');
-    var selectedGroupPreview = document.getElementById('selectedGroupPreview');
-    var saveAssignmentButton = document.getElementById('saveAssignmentButton');
-    var unassignAthleteId = document.getElementById('unassignAthleteId');
-    var unassignButton = document.getElementById('unassignButton');
-
-    var selectedAthlete = null;
-
-    function findReservationById(bookingId) {
-        for (var i = 0; i < reservationOptions.length; i++) {
-            if (String(reservationOptions[i].id) === String(bookingId)) {
-                return reservationOptions[i];
-            }
-        }
-        return null;
-    }
-
-    function fillAthleteOptions() {
-        athleteSelect.innerHTML = '<option value="">-- Select Delegate --</option>';
-        athletes.forEach(function (athlete) {
-            var option = document.createElement('option');
-            option.value = String(athlete.id);
-            option.textContent = athlete.name + ' (' + athlete.gender + ')';
-            athleteSelect.appendChild(option);
-        });
-    }
-
-    function fillBookingOptions(defaultBookingId) {
-        bookingSelect.innerHTML = '<option value="">-- Select Reserved Booking --</option>';
-        reservationOptions.forEach(function (reservation) {
-            var option = document.createElement('option');
-            option.value = String(reservation.id);
-            option.textContent = reservation.hotel_name + ' / ' + reservation.room_type_name + ' (' + reservation.remaining_slots + ' slots left)';
-            if (defaultBookingId && String(defaultBookingId) === String(reservation.id)) {
-                option.selected = true;
-            }
-            bookingSelect.appendChild(option);
-        });
-    }
-
-    function fillRoomGroupOptions() {
-        var groups = roomGroupPreview[String(bookingSelect.value)] || [];
-        var reservation = findReservationById(bookingSelect.value);
-        roomGroupingSelect.innerHTML = '<option value="">-- Select Room Group --</option>';
-
-        if (!reservation) {
-            roomGroupingSelect.disabled = true;
-            return;
-        }
-
-        groups.forEach(function (group) {
-            var option = document.createElement('option');
-            option.value = group.room_number;
-            option.textContent = group.room_number + ' - ' + group.occupants.length + '/' + reservation.capacity + ' occupied';
-            roomGroupingSelect.appendChild(option);
-        });
-
-        if (reservation.empty_room_groups > 0) {
-            var newOption = document.createElement('option');
-            newOption.value = '__new__';
-            newOption.textContent = 'Start New Room Group (' + reservation.empty_room_groups + ' available)';
-            roomGroupingSelect.appendChild(newOption);
-        }
-
-        if (
-            selectedAthlete &&
-            selectedAthlete.room_number &&
-            selectedAthlete.booking_id &&
-            String(selectedAthlete.booking_id) === String(bookingSelect.value)
-        ) {
-            roomGroupingSelect.value = selectedAthlete.room_number;
-        }
-
-        roomGroupingSelect.disabled = roomGroupingSelect.options.length === 1;
-    }
-
-    function renderCurrentAssignment() {
-        if (!selectedAthlete) {
-            currentAssignmentBox.className = 'border rounded p-3 bg-light-subtle mb-3 text-muted small';
-            currentAssignmentBox.textContent = 'Select a delegate to view current room assignment and roommate list.';
-            unassignButton.disabled = true;
-            unassignAthleteId.value = '';
-            return;
-        }
-
-        unassignAthleteId.value = String(selectedAthlete.id);
-
-        if (!selectedAthlete.room_number || !selectedAthlete.booking_id) {
-            currentAssignmentBox.className = 'border rounded p-3 bg-light-subtle mb-3';
-            currentAssignmentBox.innerHTML = '<div class="fw-semibold">Current Assignment</div><p class="small text-muted mb-0">This delegate is not assigned to any room group yet.</p>';
-            unassignButton.disabled = true;
-            return;
-        }
-
-        var roomMembers = [];
-        var groups = roomGroupPreview[String(selectedAthlete.booking_id)] || [];
-        groups.forEach(function (group) {
-            if (group.room_number === selectedAthlete.room_number) {
-                roomMembers = group.occupants || [];
-            }
-        });
-
-        var html = '';
-        html += '<div class="fw-semibold mb-1">Current Assignment: ' + selectedAthlete.room_number + '</div>';
-        html += '<div class="small text-muted mb-2">' + selectedAthlete.championship_title + ' / ' + selectedAthlete.hotel_name + ' / ' + selectedAthlete.room_type_name + '</div>';
-        html += '<div class="small fw-semibold mb-1">Roommate List</div>';
-        if (roomMembers.length === 0) {
-            html += '<p class="small text-muted mb-0">No roommates found in this room group.</p>';
-        } else {
-            html += '<ul class="mb-0 small">';
-            roomMembers.forEach(function (member) {
-                html += '<li>' + member.name + ' (' + member.gender + ')</li>';
-            });
-            html += '</ul>';
-        }
-        currentAssignmentBox.className = 'border rounded p-3 bg-light-subtle mb-3';
-        currentAssignmentBox.innerHTML = html;
-        unassignButton.disabled = false;
-    }
-
-    function renderSelectedRoomPreview() {
-        var reservation = findReservationById(bookingSelect.value);
-        if (!reservation) {
-            selectedGroupPreview.innerHTML = '<div class="fw-semibold mb-2">Selected Room Group</div><p class="text-muted small mb-0">Choose a reservation and room group to view names in that room.</p>';
-            saveAssignmentButton.disabled = true;
-            return;
-        }
-
-        if (!roomGroupingSelect.value) {
-            selectedGroupPreview.innerHTML = '<div class="fw-semibold mb-2">Selected Room Group</div><p class="text-muted small mb-0">Select a room group to see who is currently assigned.</p>';
-            saveAssignmentButton.disabled = true;
-            return;
-        }
-
-        if (roomGroupingSelect.value === '__new__') {
-            selectedGroupPreview.innerHTML = '<div class="fw-semibold mb-1 text-success">New Room Group</div><p class="small text-muted mb-0">A new empty room group will be created from your reserved room inventory.</p>';
-            saveAssignmentButton.disabled = !selectedAthlete;
-            return;
-        }
-
-        var selectedGroup = null;
-        var groups = roomGroupPreview[String(bookingSelect.value)] || [];
-        groups.forEach(function (group) {
-            if (group.room_number === roomGroupingSelect.value) {
-                selectedGroup = group;
-            }
-        });
-
-        if (!selectedGroup) {
-            selectedGroupPreview.innerHTML = '<div class="fw-semibold mb-2">Selected Room Group</div><p class="text-muted small mb-0">The selected room group is no longer available.</p>';
-            saveAssignmentButton.disabled = true;
-            return;
-        }
-
-        var html = '';
-        html += '<div class="d-flex justify-content-between align-items-center mb-2">';
-        html += '<div class="fw-semibold">' + selectedGroup.room_number + '</div>';
-        html += '<span class="badge text-bg-primary">' + selectedGroup.occupants.length + '/' + reservation.capacity + ' occupants</span>';
-        html += '</div>';
-
-        if (selectedGroup.occupants.length === 0) {
-            html += '<p class="small text-muted mb-0">No names assigned in this room group yet.</p>';
-        } else {
-            html += '<ul class="mb-0 small">';
-            selectedGroup.occupants.forEach(function (member) {
-                html += '<li>' + member.name + ' (' + member.gender + ')</li>';
-            });
-            html += '</ul>';
-        }
-
-        selectedGroupPreview.innerHTML = html;
-        saveAssignmentButton.disabled = !selectedAthlete;
-    }
-
-    function syncFromAthleteSelection() {
-        selectedAthlete = null;
-        for (var i = 0; i < athletes.length; i++) {
-            if (String(athletes[i].id) === String(athleteSelect.value)) {
-                selectedAthlete = athletes[i];
-                break;
-            }
-        }
-
-        if (selectedAthlete) {
-            fillBookingOptions(selectedAthlete.booking_id || '');
-        } else {
-            fillBookingOptions('');
-        }
-
-        fillRoomGroupOptions();
-        renderCurrentAssignment();
-        renderSelectedRoomPreview();
-    }
-
-    athleteSelect.addEventListener('change', syncFromAthleteSelection);
-
-    bookingSelect.addEventListener('change', function () {
-        fillRoomGroupOptions();
-        renderSelectedRoomPreview();
-    });
-
-    roomGroupingSelect.addEventListener('change', function () {
-        renderSelectedRoomPreview();
-    });
-
-    fillAthleteOptions();
-});
-</script>
 
 <?php
 require_once 'includes/footer.php';
