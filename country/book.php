@@ -729,8 +729,6 @@ document.addEventListener('DOMContentLoaded', function () {
             '</div>' +
             '<div class="row row-cols-2 g-2 small">' +
                 '<div class="col"><div class="border rounded p-2 bg-white">Stay Duration<br><strong>' + dayCount + ' day(s)</strong></div></div>' +
-                '<div class="col"><div class="border rounded p-2 bg-white">Overlapping Reserved Rooms<br><strong>' + overlappingReserved + '</strong></div></div>' +
-                '<div class="col"><div class="border rounded p-2 bg-white">Min Needed For Assigned Athletes<br><strong>' + minimumRoomsRequired + '</strong></div></div>' +
                 '<div class="col"><div class="border rounded p-2 bg-white">Estimated Payable<br><strong>' + formatMoney(estimatedAmount) + '</strong></div></div>' +
             '</div>' +
             '<div class="small text-muted mt-2">Charging formula: reserved rooms x room capacity x rate per pax/day x selected days. Guest assignment can be done later on Room Grouping.</div>';
