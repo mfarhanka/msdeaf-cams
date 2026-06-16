@@ -711,6 +711,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var roomValue = Number(roomsInput.value || 0);
         var roomCountForEstimate = roomValue > 0 ? roomValue : 0;
         var chargeablePaxEstimate = roomCountForEstimate * Number(selectedRoomType.capacity);
+        var amountPerDayPerPax = Number(selectedRoomType.price_per_night);
         var estimatedAmount = chargeablePaxEstimate * Number(selectedRoomType.price_per_night) * dayCount;
 
         roomsInput.min = String(minimumBookable);
@@ -729,6 +730,8 @@ document.addEventListener('DOMContentLoaded', function () {
             '</div>' +
             '<div class="row row-cols-2 g-2 small">' +
                 '<div class="col"><div class="border rounded p-2 bg-white">Stay Duration<br><strong>' + dayCount + ' day(s)</strong></div></div>' +
+                '<div class="col"><div class="border rounded p-2 bg-white">Total Pax<br><strong>' + chargeablePaxEstimate + '</strong></div></div>' +
+                '<div class="col"><div class="border rounded p-2 bg-white">Amount / Day / Pax<br><strong>' + formatMoney(amountPerDayPerPax) + '</strong></div></div>' +
                 '<div class="col"><div class="border rounded p-2 bg-white">Estimated Payable<br><strong>' + formatMoney(estimatedAmount) + '</strong></div></div>' +
             '</div>' +
             '<div class="small text-muted mt-2">Charging formula: reserved rooms x room capacity x rate per pax/day x selected days. Guest assignment can be done later on Room Grouping.</div>';
