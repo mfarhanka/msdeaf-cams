@@ -360,7 +360,7 @@ require_once 'includes/header.php';
                                 <?php foreach ($reservations as $reservation): ?>
                                     <?php
                                         $capacity = max(1, (int) $reservation['capacity']);
-                                        $stayDays = max(1, (int) ((strtotime($reservation['booking_end_date']) - strtotime($reservation['booking_start_date'])) / 86400) + 1);
+                                        $stayDays = max(1, (int) ((strtotime($reservation['booking_end_date']) - strtotime($reservation['booking_start_date'])) / 86400));
                                         $chargeablePax = (int) $reservation['rooms_reserved'] * $capacity;
                                         $lineAmount = $chargeablePax * (float) $reservation['price_per_night'] * $stayDays;
                                         $totalCapacity = (int) $reservation['rooms_reserved'] * $capacity;
@@ -541,7 +541,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return 0;
         }
 
-        return Math.floor((end - start) / 86400000) + 1;
+        return Math.max(1, Math.floor((end - start) / 86400000));
     }
 
     function isOverlap(startA, endA, startB, endB) {
