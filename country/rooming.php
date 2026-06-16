@@ -97,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             $insertStmt->execute([$bookingId, $targetRoomNumber, $athleteId]);
                         }
 
+                        $_SESSION['scroll_to_room'] = $bookingId . '|' . $targetRoomNumber;
                         $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi bi-check-circle me-1'></i>Delegate member assigned to room group successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
                     }
                 }
@@ -340,7 +341,7 @@ require_once 'includes/header.php';
             <div class="row g-3">
                 <?php foreach ($roomCards as $roomCard): ?>
                     <div class="col-lg-6">
-                        <div class="border rounded p-3 h-100">
+                        <div class="border rounded p-3 h-100" id="room-card-<?php echo (int) $roomCard['booking_id']; ?>-<?php echo preg_replace('/\D+/', '', $roomCard['room_number']); ?>">
                             <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                                 <div>
                                     <div class="fw-semibold"><?php echo htmlspecialchars($roomCard['hotel_name']); ?> - <?php echo htmlspecialchars($roomCard['room_number']); ?></div>
@@ -410,4 +411,20 @@ require_once 'includes/header.php';
 
 <?php
 require_once 'includes/footer.php';
+
+$scrollTo = $_SESSION['scroll_to_room'] ?? null;
+unset($_SESSION['scroll_to_room']);
 ?>
+
+<?php if ($scrollTo): ?>
+    <?php list($bookingId, $roomNumber) = explode('|', $scrollTo, 2); ?>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var roomId = 'room-card-<?php echo (int) $bookingId; ?>-<?php echo preg_replace('/\D+/', '', $roomNumber); ?>';
+            var roomElement = document.getElementById(roomId);
+            if (roomElement) {
+                roomElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    </script>
+<?php endif; ?>
