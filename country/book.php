@@ -488,7 +488,7 @@ require_once 'includes/header.php';
 
                     <div class="mb-3">
                         <label class="form-label">Rooms To Reserve</label>
-                        <input type="number" name="rooms_reserved" class="form-control js-rooms-reserved-input" min="1" required>
+                        <input type="number" name="rooms_reserved" class="form-control js-rooms-reserved-input" min="1" value="1" required>
                         <div class="form-text">Reserve room groups. Payable amount uses room capacity x selected dates, even before assigning guests.</div>
                     </div>
 
@@ -712,7 +712,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     championshipSelect.addEventListener('change', function () {
         if (!form.dataset.editingReservation) {
-            roomsInput.value = '';
+            roomsInput.value = '1';
         }
         syncDateLimits();
         syncReservationModal(roomTypeSelect.value);
@@ -720,7 +720,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     hotelFilter.addEventListener('change', function () {
         if (!form.dataset.editingReservation) {
-            roomsInput.value = '';
+            roomsInput.value = '1';
         }
         renderRoomTypeOptions(roomTypeSelect.value);
         renderSummary();
@@ -728,7 +728,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     roomTypeSelect.addEventListener('change', function () {
         if (!form.dataset.editingReservation) {
-            roomsInput.value = '';
+            roomsInput.value = '1';
         }
         renderSummary();
     });
@@ -760,6 +760,7 @@ document.addEventListener('DOMContentLoaded', function () {
             form.dataset.assignedAthletes = '0';
             form.reset();
             bookingIdInput.value = '0';
+            roomsInput.value = '1';
             hotelFilter.innerHTML = '<option value="">-- All Available Hotels --</option>';
             roomTypeSelect.innerHTML = '<option value="">-- Choose Room Type --</option>';
             syncDateLimits();
