@@ -105,11 +105,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     } elseif ($_POST['action'] === 'unassign_room') {
         $athleteId = (int) ($_POST['athlete_id'] ?? 0);
+        $bookingId = (int) ($_POST['booking_id'] ?? 0);
+        $roomNumber = trim((string) ($_POST['room_number'] ?? ''));
+        
         if ($athleteId <= 0) {
             $msg = "<div class='alert alert-warning'>Please select a delegate member to unassign.</div>";
         } else {
             $deleteStmt = $pdo->prepare("DELETE ra FROM room_assignments ra JOIN athletes a ON a.id = ra.athlete_id WHERE ra.athlete_id = ? AND a.country_id = ?");
             $deleteStmt->execute([$athleteId, $countryId]);
+            
+            if ($bookingId > 0 && $roomNumber !== '') {
+                $_SESSION['scroll_to_room'] = $bookingId . '|' . $roomNumber;
+            }
+            
             $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi bi-x-circle me-1'></i>Room assignment removed successfully.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
         }
     }
@@ -364,6 +372,8 @@ require_once 'includes/header.php';
                                             <form method="POST" onsubmit="return confirm('Unassign this delegate from <?php echo htmlspecialchars($roomCard['room_number']); ?>?');">
                                                 <input type="hidden" name="action" value="unassign_room">
                                                 <input type="hidden" name="athlete_id" value="<?php echo (int) $occupant['athlete_id']; ?>">
+                                                <input type="hidden" name="booking_id" value="<?php echo (int) $roomCard['booking_id']; ?>">
+                                                <input type="hidden" name="room_number" value="<?php echo htmlspecialchars($roomCard['room_number']); ?>">
                                                 <button type="submit" class="btn btn-outline-danger btn-sm">Remove</button>
                                             </form>
                                         </li>
