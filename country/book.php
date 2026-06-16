@@ -57,8 +57,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $msg = "<div class='alert alert-warning'>The selected hotel is not available for this championship.</div>";
             } elseif ($bookingStartDate > $bookingEndDate) {
                 $msg = "<div class='alert alert-warning'>Check-out date must be on or after check-in date.</div>";
-            } elseif ($bookingStartDate < $championship['start_date'] || $bookingEndDate > $championship['end_date']) {
-                $msg = "<div class='alert alert-warning'>Selected stay dates must be inside the championship date range.</div>";
             } else {
                 $existingBooking = null;
                 if ($bookingId > 0) {
@@ -656,16 +654,11 @@ document.addEventListener('DOMContentLoaded', function () {
     function syncDateLimits() {
         var championshipDates = championshipDateMap[String(championshipSelect.value)] || null;
 
-        bookingStartInput.min = championshipDates ? championshipDates.start_date : '';
-        bookingStartInput.max = championshipDates ? championshipDates.end_date : '';
-        bookingEndInput.min = championshipDates ? championshipDates.start_date : '';
-        bookingEndInput.max = championshipDates ? championshipDates.end_date : '';
-
         if (championshipDates) {
-            if (!bookingStartInput.value || bookingStartInput.value < championshipDates.start_date || bookingStartInput.value > championshipDates.end_date) {
+            if (!bookingStartInput.value) {
                 bookingStartInput.value = championshipDates.start_date;
             }
-            if (!bookingEndInput.value || bookingEndInput.value < championshipDates.start_date || bookingEndInput.value > championshipDates.end_date) {
+            if (!bookingEndInput.value) {
                 bookingEndInput.value = championshipDates.end_date;
             }
         }
