@@ -552,6 +552,30 @@ document.addEventListener('DOMContentLoaded', function () {
         return startA <= endB && endA >= startB;
     }
 
+    function getOverlappingReservedRooms(roomTypeId, editingBookingId, startDate, endDate) {
+        var overlappingReserved = 0;
+
+        if (!startDate || !endDate) {
+            return overlappingReserved;
+        }
+
+        activeBookings.forEach(function (booking) {
+            if (Number(booking.room_type_id) !== Number(roomTypeId)) {
+                return;
+            }
+
+            if (editingBookingId > 0 && Number(booking.id) === editingBookingId) {
+                return;
+            }
+
+            if (isOverlap(booking.booking_start_date, booking.booking_end_date, startDate, endDate)) {
+                overlappingReserved += Number(booking.rooms_reserved || 0);
+            }
+        });
+
+        return overlappingReserved;
+    }
+
     function getAllowedRoomTypes(championshipId, hotelId) {
         var mappedHotels = championshipHotelMap[String(championshipId)] || [];
         var hasMappedHotels = mappedHotels.length > 0;
@@ -597,17 +621,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderRoomTypeOptions(selectedRoomTypeId) {
         var allowedRoomTypes = getAllowedRoomTypes(championshipSelect.value, hotelFilter.value);
+        var editingBookingId = Number(bookingIdInput.value || 0);
+        var hasValidDateRange = getDayCount(bookingStartInput.value, bookingEndInput.value) > 0;
+        var hasSelectedOption = false;
         roomTypeSelect.innerHTML = '<option value="">-- Choose Room Type --</option>';
 
         allowedRoomTypes.forEach(function (roomType) {
+            var overlappingReserved = hasValidDateRange
+                ? getOverlappingReservedRooms(roomType.id, editingBookingId, bookingStartInput.value, bookingEndInput.value)
+                : 0;
+            var availableRooms = Math.max(0, Number(roomType.total_allotment) - overlappingReserved);
+            var isFull = hasValidDateRange && availableRooms <= 0;
             var option = document.createElement('option');
             option.value = String(roomType.id);
-            option.textContent = roomType.hotel_name + ' (' + formatHotelStarRating(roomType.hotel_star_rating) + ') / ' + roomType.room_type_name + ' - allotment: ' + roomType.total_allotment + ' room(s)';
-            if (selectedRoomTypeId && String(selectedRoomTypeId) === String(roomType.id)) {
+            option.textContent =
+                roomType.hotel_name + ' (' + formatHotelStarRating(roomType.hotel_star_rating) + ') / ' +
+                roomType.room_type_name + ' - availability: ' + availableRooms + '/' + roomType.total_allotment + ' room(s)' +
+                (isFull ? ' - Unavailable (Full)' : '');
+            option.disabled = isFull;
+            if (selectedRoomTypeId && String(selectedRoomTypeId) === String(roomType.id) && !isFull) {
                 option.selected = true;
+                hasSelectedOption = true;
             }
             roomTypeSelect.appendChild(option);
         });
+
+        if (selectedRoomTypeId && !hasSelectedOption) {
+            roomTypeSelect.value = '';
+        }
 
         roomTypeSelect.disabled = roomTypeSelect.options.length === 1;
     }
@@ -733,8 +774,14 @@ document.addEventListener('DOMContentLoaded', function () {
         renderSummary();
     });
 
-    bookingStartInput.addEventListener('change', renderSummary);
-    bookingEndInput.addEventListener('change', renderSummary);
+    bookingStartInput.addEventListener('change', function () {
+        renderRoomTypeOptions(roomTypeSelect.value);
+        renderSummary();
+    });
+    bookingEndInput.addEventListener('change', function () {
+        renderRoomTypeOptions(roomTypeSelect.value);
+        renderSummary();
+    });
     roomsInput.addEventListener('input', renderSummary);
 
     document.querySelectorAll('.js-edit-reservation').forEach(function (button) {
