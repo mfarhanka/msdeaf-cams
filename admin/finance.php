@@ -23,7 +23,7 @@ $countryTotalsStmt = $pdo->query("SELECT
     u.country_name,
     COUNT(DISTINCT b.id) AS booking_count,
     COALESCE(SUM(COALESCE(assignment_totals.assigned_athletes, 0)), 0) AS assigned_pax,
-    COALESCE(SUM(COALESCE(b.rooms_reserved, 0) * COALESCE(rt.capacity, 1) * COALESCE(rt.price_per_night, 0) * (DATEDIFF(b.booking_end_date, b.booking_start_date) + 1)), 0) AS total_amount
+    COALESCE(SUM(COALESCE(b.rooms_reserved, 0) * COALESCE(rt.capacity, 1) * COALESCE(rt.price_per_night, 0) * GREATEST(1, DATEDIFF(b.booking_end_date, b.booking_start_date))), 0) AS total_amount
     FROM users u
     LEFT JOIN bookings b ON b.country_id = u.id AND b.status <> 'Cancelled'
     LEFT JOIN championships c ON b.championship_id = c.id
@@ -53,7 +53,7 @@ $detailStmt = $pdo->prepare("SELECT
     rt.capacity,
     rt.price_per_night,
     COALESCE(assignment_totals.assigned_athletes, 0) AS assigned_athletes,
-    (DATEDIFF(b.booking_end_date, b.booking_start_date) + 1) AS booking_days
+    DATEDIFF(b.booking_end_date, b.booking_start_date) AS booking_days
     FROM bookings b
     JOIN users u ON u.id = b.country_id
     JOIN championships c ON c.id = b.championship_id

@@ -233,6 +233,7 @@ function getRequiredDatabaseTables(): array
         'athletes',
         'bookings',
         'activity_logs',
+        'announcements',
         'room_assignments',
     ];
 }

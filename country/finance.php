@@ -21,7 +21,7 @@ $financeStmt = $pdo->prepare("SELECT
     rt.capacity,
     rt.price_per_night,
     COALESCE(assignment_totals.assigned_athletes, 0) AS assigned_athletes,
-    (DATEDIFF(b.booking_end_date, b.booking_start_date) + 1) AS booking_days
+    DATEDIFF(b.booking_end_date, b.booking_start_date) AS booking_days
     FROM bookings b
     JOIN championships c ON b.championship_id = c.id
     JOIN hotels h ON b.hotel_id = h.id
@@ -46,6 +46,15 @@ foreach ($financeRows as &$financeRow) {
     $grandTotal += $lineTotal;
 }
 unset($financeRow);
+
+$paymentAccount = [
+    'Bank Account' => 'CIMB Bank Berhad',
+    'Bank Name' => 'PERSATUAN SUKAN ORANG PEKAK MALAYSIA',
+    'Account No' => '8000852319',
+    'Branch Name' => 'WISMA KOPONAS, KUALA LUMPUR',
+    'Swift Code' => 'CIBBMYKL',
+    'Branch Code' => '1426',
+];
 
 $participantsStmt = $pdo->prepare("SELECT a.first_name, a.last_name, a.gender,
     ra.room_number,
@@ -73,20 +82,34 @@ require_once 'includes/header.php';
 
 <div class="row g-3 mb-3">
     <div class="col-md-4">
-        <div class="card shadow-sm border-success">
+        <div class="card shadow-sm border-success mb-3">
             <div class="card-body">
                 <div class="text-muted small mb-1">Total Amount</div>
                 <div class="fs-4 fw-bold text-success">$<?php echo number_format($grandTotal, 2); ?></div>
                 <div class="small text-muted">Calculated as reserved rooms x room capacity x rate per pax per day x selected stay days</div>
             </div>
         </div>
-    </div>
-    <div class="col-md-4">
         <div class="card shadow-sm border-primary">
             <div class="card-body">
                 <div class="text-muted small mb-1">Total Rooms Booked</div>
                 <div class="fs-4 fw-bold text-primary"><?php echo (int) $roomsBooked; ?></div>
                 <div class="small text-muted">All active room reservations for this delegation</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card shadow-sm border-info h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-bank text-info fs-5" aria-hidden="true"></i>
+                    <div class="fw-bold">Payment Account</div>
+                </div>
+                <dl class="row small mb-0">
+                    <?php foreach ($paymentAccount as $label => $value): ?>
+                        <dt class="col-5 text-muted fw-semibold"><?php echo htmlspecialchars($label); ?></dt>
+                        <dd class="col-7 mb-1"><?php echo htmlspecialchars($value); ?></dd>
+                    <?php endforeach; ?>
+                </dl>
             </div>
         </div>
     </div>

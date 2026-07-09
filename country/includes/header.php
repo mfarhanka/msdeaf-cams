@@ -3,6 +3,21 @@ require_once __DIR__ . '/../../includes/delegate_menu.php';
 
 $current_page = basename($_SERVER['PHP_SELF']);
 $delegateMenuItems = isset($pdo) ? getVisibleDelegateMenuItems($pdo) : getDelegateMenuItems();
+$loginAnnouncement = null;
+
+if (!empty($_SESSION['show_login_announcement']) && isset($pdo)) {
+    ensureAnnouncementsTable($pdo);
+
+    $announcementStmt = $pdo->query(
+        "SELECT title, body, image_path
+        FROM announcements
+        WHERE display_on_login = 1 AND is_enabled = 1
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1"
+    );
+    $loginAnnouncement = $announcementStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    unset($_SESSION['show_login_announcement']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -142,4 +157,33 @@ $delegateMenuItems = isset($pdo) ? getVisibleDelegateMenuItems($pdo) : getDelega
 
         <!-- Main Content -->
         <main class="col-md-10 ms-sm-auto px-md-4 py-4">
+            <?php if ($loginAnnouncement !== null): ?>
+                <div class="modal fade" id="delegateLoginAnnouncementModal" tabindex="-1" aria-labelledby="delegateLoginAnnouncementTitle" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <?php if (!empty($loginAnnouncement['image_path'])): ?>
+                                <img src="../<?php echo htmlspecialchars($loginAnnouncement['image_path']); ?>" class="img-fluid rounded-top" alt="" style="max-height: 360px; object-fit: cover;">
+                            <?php endif; ?>
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="delegateLoginAnnouncementTitle"><?php echo htmlspecialchars($loginAnnouncement['title']); ?></h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="mb-0" style="white-space: pre-wrap;"><?php echo htmlspecialchars($loginAnnouncement['body']); ?></p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function () {
+                        var announcementModal = document.getElementById('delegateLoginAnnouncementModal');
+                        if (announcementModal && window.bootstrap) {
+                            new bootstrap.Modal(announcementModal).show();
+                        }
+                    });
+                </script>
+            <?php endif; ?>
             <?php if(isset($msg) && !empty($msg)) echo $msg; ?>

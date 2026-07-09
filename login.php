@@ -39,6 +39,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $_SESSION['id'] = $row['id'];
                     $_SESSION['username'] = $row['username'];
                     $_SESSION['role'] = $row['role']; // e.g. 'admin' or 'country_manager'
+                    unset($_SESSION['show_login_announcement']);
+
+                    if ($row['role'] === 'country_manager') {
+                        $_SESSION['show_login_announcement'] = true;
+                    }
 
                     $telegramMessage = formatTelegramActivityMessage(
                         'CAMS login',

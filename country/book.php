@@ -299,6 +299,14 @@ require_once 'includes/header.php';
     </button>
 </div>
 
+<div class="alert alert-info d-flex align-items-start gap-2" role="alert">
+    <i class="bi bi-info-circle-fill mt-1" aria-hidden="true"></i>
+    <div>
+        <div class="fw-semibold">Meal Arrangement Note</div>
+        <div class="small">Breakfast is available at the hotel. Lunch will be packed and delivered to the venue.</div>
+    </div>
+</div>
+
 <div class="row g-3 mb-3">
     <div class="col-md-4">
         <div class="card shadow-sm h-100">

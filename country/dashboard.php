@@ -11,7 +11,7 @@ $roomStmt = $pdo->prepare("SELECT COALESCE(SUM(rooms_reserved), 0) FROM bookings
 $roomStmt->execute([$countryId]);
 $roomsBooked = $roomStmt->fetchColumn();
 
-$balanceStmt = $pdo->prepare("SELECT COALESCE(SUM(b.rooms_reserved * rt.capacity * rt.price_per_night * (DATEDIFF(b.booking_end_date, b.booking_start_date) + 1)), 0)
+$balanceStmt = $pdo->prepare("SELECT COALESCE(SUM(b.rooms_reserved * rt.capacity * rt.price_per_night * GREATEST(1, DATEDIFF(b.booking_end_date, b.booking_start_date))), 0)
     FROM bookings b
     JOIN championships c ON b.championship_id = c.id
     JOIN room_types rt ON b.room_type_id = rt.id

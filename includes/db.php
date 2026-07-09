@@ -60,6 +60,33 @@ function ensureAppSettingsTable(PDO $pdo): void
     $stmt->execute();
 }
 
+function ensureAnnouncementsTable(PDO $pdo): void
+{
+    static $announcementsChecked = false;
+
+    if ($announcementsChecked) {
+        return;
+    }
+
+    $announcementsChecked = true;
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS announcements (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(150) NOT NULL,
+            body TEXT NOT NULL,
+            image_path VARCHAR(255) NULL,
+            is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+            display_on_login TINYINT(1) NOT NULL DEFAULT 0,
+            created_by INT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_announcements_display (display_on_login, is_enabled),
+            CONSTRAINT fk_announcements_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+}
+
 function getAppSetting(PDO $pdo, string $key, ?string $default = null): ?string
 {
     ensureAppSettingsTable($pdo);
@@ -256,6 +283,7 @@ try {
         ensureUserStatusColumn($pdo);
         ensureActivityLogTable($pdo);
         ensureAppSettingsTable($pdo);
+        ensureAnnouncementsTable($pdo);
     }
 } catch(Exception $e) {
     error_log('Database connection failed: ' . json_encode([
