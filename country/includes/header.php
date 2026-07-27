@@ -127,19 +127,69 @@ if (!empty($_SESSION['show_login_announcement']) && isset($pdo)) {
         .border-bottom {
             margin-bottom: 0.8rem;
         }
+
+        .mobile-menu-button {
+            border-color: rgba(255,255,255,0.65);
+            color: white;
+        }
+
+        .mobile-menu-button:hover,
+        .mobile-menu-button:focus {
+            background-color: rgba(255,255,255,0.12);
+            color: white;
+        }
+
+        @media (max-width: 767.98px) {
+            .navbar {
+                padding: 0.5rem 0.25rem;
+            }
+
+            .navbar-brand {
+                max-width: calc(100vw - 72px);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: 1rem;
+            }
+
+            main {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
 
 <nav class="navbar navbar-expand-lg">
     <div class="container-fluid">
-        <a class="navbar-brand" href="dashboard.php"><i class="bi bi-building-check me-2"></i>CAMS | World Deaf Sports</a>
-        <div class="d-flex align-items-center">
+        <div class="d-flex align-items-center min-w-0">
+            <button class="btn mobile-menu-button d-md-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNavigation" aria-controls="mobileNavigation" aria-label="Open navigation menu">
+                <i class="bi bi-list fs-4"></i>
+            </button>
+            <a class="navbar-brand" href="dashboard.php"><i class="bi bi-building-check me-2"></i>CAMS | World Deaf Sports</a>
+        </div>
+        <div class="d-none d-md-flex align-items-center">
             <span class="text-white small me-3"><i class="bi bi-person-circle me-1"></i> Delegation: <?php echo htmlspecialchars($_SESSION['username']); ?></span>
             <a href="../logout.php" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </div>
     </div>
 </nav>
+
+<div class="offcanvas offcanvas-start d-md-none" tabindex="-1" id="mobileNavigation" aria-labelledby="mobileNavigationLabel">
+    <div class="offcanvas-header bg-primary text-white">
+        <h5 class="offcanvas-title" id="mobileNavigationLabel">Delegation Menu</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body d-flex flex-column p-3">
+        <div class="small text-muted mb-3"><i class="bi bi-person-circle me-1"></i>Delegation: <?php echo htmlspecialchars($_SESSION['username']); ?></div>
+        <div class="nav flex-column nav-pills">
+            <?php foreach ($delegateMenuItems as $menuItem): ?>
+                <a class="nav-link w-100 text-start <?php echo $current_page == $menuItem['href'] ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($menuItem['href']); ?>"><i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i><?php echo htmlspecialchars($menuItem['label']); ?></a>
+            <?php endforeach; ?>
+        </div>
+        <a href="../logout.php" class="btn btn-outline-danger mt-auto"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+    </div>
+</div>
 
 <div class="container-fluid">
     <div class="row">

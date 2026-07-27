@@ -110,19 +110,75 @@ $current_page = basename($_SERVER['PHP_SELF']);
         .border-bottom {
             margin-bottom: 0.8rem;
         }
+
+        .mobile-menu-button {
+            border-color: rgba(255,255,255,0.65);
+            color: white;
+        }
+
+        .mobile-menu-button:hover,
+        .mobile-menu-button:focus {
+            background-color: rgba(255,255,255,0.12);
+            color: white;
+        }
+
+        @media (max-width: 767.98px) {
+            .navbar {
+                padding: 0.5rem 0.25rem;
+            }
+
+            .navbar-brand {
+                max-width: calc(100vw - 72px);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: 1rem;
+            }
+
+            main {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
 
 <nav class="navbar navbar-expand-lg">
     <div class="container-fluid">
-        <a class="navbar-brand" href="dashboard.php"><i class="bi bi-building-check me-2"></i>CAMS | World Deaf Sports</a>
-        <div class="d-flex align-items-center">
+        <div class="d-flex align-items-center min-w-0">
+            <button class="btn mobile-menu-button d-md-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNavigation" aria-controls="mobileNavigation" aria-label="Open navigation menu">
+                <i class="bi bi-list fs-4"></i>
+            </button>
+            <a class="navbar-brand" href="dashboard.php"><i class="bi bi-building-check me-2"></i>CAMS | World Deaf Sports</a>
+        </div>
+        <div class="d-none d-md-flex align-items-center">
             <span class="text-white small me-3"><i class="bi bi-person-circle me-1"></i> Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?></span>
             <a href="../logout.php" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </div>
     </div>
 </nav>
+
+<div class="offcanvas offcanvas-start d-md-none" tabindex="-1" id="mobileNavigation" aria-labelledby="mobileNavigationLabel">
+    <div class="offcanvas-header bg-primary text-white">
+        <h5 class="offcanvas-title" id="mobileNavigationLabel">Management</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body d-flex flex-column p-3">
+        <div class="small text-muted mb-3"><i class="bi bi-person-circle me-1"></i>Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?></div>
+        <div class="nav flex-column nav-pills">
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'admins.php' ? 'active' : ''; ?>" href="admins.php"><i class="bi bi-shield-lock me-2"></i>Admins</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'championships.php' ? 'active' : ''; ?>" href="championships.php"><i class="bi bi-trophy me-2"></i>Championships</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'hotels.php' ? 'active' : ''; ?>" href="hotels.php"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'delegations.php' ? 'active' : ''; ?>" href="delegations.php"><i class="bi bi-globe me-2"></i>Delegations</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php"><i class="bi bi-megaphone me-2"></i>Announcements</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'activity_logs.php' ? 'active' : ''; ?>" href="activity_logs.php"><i class="bi bi-journal-text me-2"></i>Activity Logs</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'finance.php' ? 'active' : ''; ?>" href="finance.php"><i class="bi bi-receipt-cutoff me-2"></i>Financial Report</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'tshirts.php' ? 'active' : ''; ?>" href="tshirts.php"><i class="bi bi-tags me-2"></i>T-Shirt Sizes</a>
+        </div>
+        <a href="../logout.php" class="btn btn-outline-danger mt-auto"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+    </div>
+</div>
 
 <div class="container-fluid">
     <div class="row">
