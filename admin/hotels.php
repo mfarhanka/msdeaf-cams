@@ -6,28 +6,82 @@ function formatHotelStarRatingLabel(int $starRating): string
     return $starRating > 0 ? str_repeat('⭐', $starRating) : 'Unrated';
 }
 
+function getSelectedChampionshipIds(PDO $pdo, array $submittedIds): array
+{
+    $submittedIds = array_values(array_unique(array_filter(array_map('intval', $submittedIds), static function (int $id): bool {
+        return $id > 0;
+    })));
+
+    if ($submittedIds === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($submittedIds), '?'));
+    $stmt = $pdo->prepare("SELECT id FROM championships WHERE id IN ($placeholders)");
+    $stmt->execute($submittedIds);
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+function syncHotelChampionships(PDO $pdo, int $hotelId, array $championshipIds): void
+{
+    $pdo->prepare("DELETE FROM championship_hotels WHERE hotel_id = ?")->execute([$hotelId]);
+    $insertStmt = $pdo->prepare("INSERT INTO championship_hotels (championship_id, hotel_id) VALUES (?, ?)");
+    foreach ($championshipIds as $championshipId) {
+        $insertStmt->execute([$championshipId, $hotelId]);
+    }
+}
+
+$championships = $pdo->query("SELECT id, title, start_date, end_date FROM championships ORDER BY start_date ASC, title ASC")->fetchAll(PDO::FETCH_ASSOC);
+
 // Handle POST actions for Hotels & Room Types
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'add_hotel') {
-        $name = trim($_POST['name']);
-        $address = trim($_POST['address']);
+        $name = trim($_POST['name'] ?? '');
+        $address = trim($_POST['address'] ?? '');
         $starRating = max(0, min(5, (int) ($_POST['star_rating'] ?? 0)));
-        
-        $stmt = $pdo->prepare("INSERT INTO hotels (name, address, star_rating, total_rooms) VALUES (?, ?, ?, 0)");
-        if ($stmt->execute([$name, $address, $starRating])) {
-            $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-hotel'></i> Hotel added successfully!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        $championshipIds = getSelectedChampionshipIds($pdo, (array) ($_POST['championship_ids'] ?? []));
+
+        if ($name !== '' && $address !== '' && ($championships === [] || $championshipIds !== [])) {
+            try {
+                $pdo->beginTransaction();
+                $stmt = $pdo->prepare("INSERT INTO hotels (name, address, star_rating, total_rooms) VALUES (?, ?, ?, 0)");
+                $stmt->execute([$name, $address, $starRating]);
+                syncHotelChampionships($pdo, (int) $pdo->lastInsertId(), $championshipIds);
+                $pdo->commit();
+                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-hotel'></i> Hotel added and linked to the selected championships!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $msg = "<div class='alert alert-danger'>Unable to add the hotel right now. Please try again.</div>";
+            }
+        } else {
+            $msg = "<div class='alert alert-warning'>Please complete the hotel details and select at least one championship.</div>";
         }
     } elseif ($_POST['action'] === 'update_hotel_details') {
         $id = (int) ($_POST['id'] ?? 0);
         $name = trim($_POST['name'] ?? '');
         $address = trim($_POST['address'] ?? '');
         $starRating = max(0, min(5, (int) ($_POST['star_rating'] ?? 0)));
+        $championshipIds = getSelectedChampionshipIds($pdo, (array) ($_POST['championship_ids'] ?? []));
 
-        if ($id > 0 && $name !== '' && $address !== '') {
-            $stmt = $pdo->prepare("UPDATE hotels SET name = ?, address = ?, star_rating = ? WHERE id = ?");
-            if ($stmt->execute([$name, $address, $starRating, $id])) {
-                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-pen'></i> Hotel details updated!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        if ($id > 0 && $name !== '' && $address !== '' && ($championships === [] || $championshipIds !== [])) {
+            try {
+                $pdo->beginTransaction();
+                $stmt = $pdo->prepare("UPDATE hotels SET name = ?, address = ?, star_rating = ? WHERE id = ?");
+                $stmt->execute([$name, $address, $starRating, $id]);
+                syncHotelChampionships($pdo, $id, $championshipIds);
+                $pdo->commit();
+                $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='fas fa-pen'></i> Hotel details and championship links updated!<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $msg = "<div class='alert alert-danger'>Unable to update the hotel right now. Please try again.</div>";
             }
+        } else {
+            $msg = "<div class='alert alert-warning'>Please complete the hotel details and select at least one championship.</div>";
         }
     } elseif ($_POST['action'] === 'delete_hotel') {
         $id = (int) ($_POST['id'] ?? 0);
@@ -125,6 +179,11 @@ $hotels_stmt = $pdo->query("
 ");
 $hotels = $hotels_stmt->fetchAll(PDO::FETCH_ASSOC);
 
+$hotelChampionshipMap = [];
+foreach ($pdo->query("SELECT hotel_id, championship_id FROM championship_hotels ORDER BY championship_id")->fetchAll(PDO::FETCH_ASSOC) as $link) {
+    $hotelChampionshipMap[(int) $link['hotel_id']][] = (int) $link['championship_id'];
+}
+
 $selectedHotelId = isset($_GET['hotel_id']) ? (int) $_GET['hotel_id'] : 0;
 $selectedHotelName = 'All Hotels';
 
@@ -169,6 +228,7 @@ require_once 'includes/header.php';
                         <th>Hotel Name</th>
                         <th>Address</th>
                         <th>Star Rate</th>
+                        <th>Championships</th>
                         <th>Total Rooms</th>
                         <th>Actions</th>
                     </tr>
@@ -180,6 +240,14 @@ require_once 'includes/header.php';
                         <td class="fw-bold"><?php echo htmlspecialchars($h['name']); ?></td>
                         <td><?php echo htmlspecialchars($h['address']); ?></td>
                         <td><?php echo htmlspecialchars(formatHotelStarRatingLabel((int) $h['star_rating'])); ?></td>
+                        <td>
+                            <?php $linkedChampionshipIds = $hotelChampionshipMap[(int) $h['id']] ?? []; ?>
+                            <?php if ($linkedChampionshipIds === []): ?>
+                                <span class="badge bg-warning text-dark">Not linked</span>
+                            <?php else: ?>
+                                <?php echo count($linkedChampionshipIds); ?> linked
+                            <?php endif; ?>
+                        </td>
                         <td><?php echo htmlspecialchars($h['calculated_total_rooms']); ?></td>
                         <td>
                             <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editHotelModal<?php echo (int) $h['id']; ?>">
@@ -229,6 +297,25 @@ require_once 'includes/header.php';
                                         <?php endfor; ?>
                                     </select>
                                 </div>
+
+                                <?php if ($championships !== []): ?>
+                                    <div class="mb-3">
+                                        <label class="form-label text-muted fw-bold d-block">Available for Championships</label>
+                                        <div class="border rounded p-2" style="max-height: 220px; overflow-y: auto;">
+                                            <?php $linkedIds = $hotelChampionshipMap[(int) $h['id']] ?? []; ?>
+                                            <?php foreach ($championships as $championship): ?>
+                                                <?php $isChecked = in_array((int) $championship['id'], $linkedIds, true); ?>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" name="championship_ids[]" value="<?php echo (int) $championship['id']; ?>" id="editHotel<?php echo (int) $h['id']; ?>Championship<?php echo (int) $championship['id']; ?>" <?php echo $isChecked ? 'checked' : ''; ?>>
+                                                    <label class="form-check-label" for="editHotel<?php echo (int) $h['id']; ?>Championship<?php echo (int) $championship['id']; ?>">
+                                                        <?php echo htmlspecialchars($championship['title']); ?>
+                                                    </label>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                        <div class="form-text">Select at least one championship.</div>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -390,6 +477,23 @@ require_once 'includes/header.php';
                             <?php endfor; ?>
                         </select>
                     </div>
+
+                    <?php if ($championships !== []): ?>
+                        <div class="mb-3">
+                            <label class="form-label text-muted fw-bold d-block">Available for Championships</label>
+                            <div class="border rounded p-2" style="max-height: 220px; overflow-y: auto;">
+                                <?php foreach ($championships as $championship): ?>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="championship_ids[]" value="<?php echo (int) $championship['id']; ?>" id="addHotelChampionship<?php echo (int) $championship['id']; ?>" checked>
+                                        <label class="form-check-label" for="addHotelChampionship<?php echo (int) $championship['id']; ?>">
+                                            <?php echo htmlspecialchars($championship['title']); ?>
+                                        </label>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="form-text">The hotel will appear in room booking only for the selected championships.</div>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

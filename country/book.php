@@ -11,13 +11,6 @@ function formatHotelStarRatingLabel(int $starRating): string
 
 function isHotelAvailableForChampionship(PDO $pdo, int $championshipId, int $hotelId): bool
 {
-    $mappingCountStmt = $pdo->prepare("SELECT COUNT(*) FROM championship_hotels WHERE championship_id = ?");
-    $mappingCountStmt->execute([$championshipId]);
-
-    if ((int) $mappingCountStmt->fetchColumn() === 0) {
-        return true;
-    }
-
     $hotelLinkStmt = $pdo->prepare("SELECT COUNT(*) FROM championship_hotels WHERE championship_id = ? AND hotel_id = ?");
     $hotelLinkStmt->execute([$championshipId, $hotelId]);
 
@@ -569,10 +562,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function getAllowedRoomTypes(championshipId, hotelId) {
         var mappedHotels = championshipHotelMap[String(championshipId)] || [];
-        var hasMappedHotels = mappedHotels.length > 0;
 
         return reservationAvailability.filter(function (roomType) {
-            var matchesChampionship = !championshipId || !hasMappedHotels || mappedHotels.indexOf(roomType.hotel_id) !== -1;
+            var matchesChampionship = !championshipId || mappedHotels.indexOf(roomType.hotel_id) !== -1;
             var matchesHotel = !hotelId || roomType.hotel_id === Number(hotelId);
             return matchesChampionship && matchesHotel;
         });
