@@ -184,7 +184,7 @@ if (!empty($_SESSION['show_login_announcement']) && isset($pdo)) {
         <div class="small text-muted mb-3"><i class="bi bi-person-circle me-1"></i>Delegation: <?php echo htmlspecialchars($_SESSION['username']); ?></div>
         <div class="nav flex-column nav-pills">
             <?php foreach ($delegateMenuItems as $menuItem): ?>
-                <a class="nav-link w-100 text-start <?php echo $current_page == $menuItem['href'] ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($menuItem['href']); ?>"><i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i><?php echo htmlspecialchars($menuItem['label']); ?></a>
+                <a class="nav-link w-100 text-start <?php echo $current_page == $menuItem['href'] ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($menuItem['href']); ?>"><i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i><?php echo htmlspecialchars($menuItem['label']); ?><?php if (!empty($menuItem['badge'])): ?><span class="badge rounded-pill text-bg-danger ms-2"><?php echo htmlspecialchars($menuItem['badge']); ?></span><?php endif; ?></a>
             <?php endforeach; ?>
         </div>
         <a href="../logout.php" class="btn btn-outline-danger mt-auto"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
@@ -199,7 +199,7 @@ if (!empty($_SESSION['show_login_announcement']) && isset($pdo)) {
                 <div class="manager-only">
                     <h6 class="px-3 mb-2 text-muted small text-uppercase fw-bold">Delegation</h6>
                     <?php foreach ($delegateMenuItems as $menuItem): ?>
-                        <a class="nav-link w-100 text-start <?php echo $current_page == $menuItem['href'] ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($menuItem['href']); ?>"><i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i><?php echo htmlspecialchars($menuItem['label']); ?></a>
+                        <a class="nav-link w-100 text-start <?php echo $current_page == $menuItem['href'] ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($menuItem['href']); ?>"><i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i><?php echo htmlspecialchars($menuItem['label']); ?><?php if (!empty($menuItem['badge'])): ?><span class="badge rounded-pill text-bg-danger ms-2"><?php echo htmlspecialchars($menuItem['badge']); ?></span><?php endif; ?></a>
                     <?php endforeach; ?>
                 </div>
             </div>

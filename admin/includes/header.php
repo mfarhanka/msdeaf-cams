@@ -176,7 +176,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <a class="nav-link w-100 text-start <?php echo $current_page == 'finance.php' ? 'active' : ''; ?>" href="finance.php"><i class="bi bi-receipt-cutoff me-2"></i>Financial Report</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'tshirts.php' ? 'active' : ''; ?>" href="tshirts.php"><i class="bi bi-tags me-2"></i>T-Shirt Sizes</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'passports.php' ? 'active' : ''; ?>" href="passports.php"><i class="bi bi-passport me-2"></i>Passport Details</a>
-            <a class="nav-link w-100 text-start <?php echo $current_page == 'flights.php' ? 'active' : ''; ?>" href="flights.php"><i class="bi bi-airplane me-2"></i>Flight Details</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'flights.php' ? 'active' : ''; ?>" href="flights.php"><i class="bi bi-airplane-fill me-2"></i>Flight Details<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>" href="settings.php"><i class="bi bi-gear me-2"></i>Settings</a>
         </div>
         <a href="../logout.php" class="btn btn-outline-danger mt-auto"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
@@ -200,7 +200,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'finance.php' ? 'active' : ''; ?>" href="finance.php"><i class="bi bi-receipt-cutoff me-2"></i>Financial Report</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'tshirts.php' ? 'active' : ''; ?>" href="tshirts.php"><i class="bi bi-tags me-2"></i>T-Shirt Sizes</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'passports.php' ? 'active' : ''; ?>" href="passports.php"><i class="bi bi-passport me-2"></i>Passport Details</a>
-                    <a class="nav-link w-100 text-start <?php echo $current_page == 'flights.php' ? 'active' : ''; ?>" href="flights.php"><i class="bi bi-airplane me-2"></i>Flight Details</a>
+                    <a class="nav-link w-100 text-start <?php echo $current_page == 'flights.php' ? 'active' : ''; ?>" href="flights.php"><i class="bi bi-airplane-fill me-2"></i>Flight Details<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>" href="settings.php"><i class="bi bi-gear me-2"></i>Settings</a>
                 </div>
             </div>

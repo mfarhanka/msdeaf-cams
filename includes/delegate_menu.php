@@ -23,9 +23,10 @@ function getDelegateMenuItems(): array
         ],
         'flights' => [
             'label' => 'Flight Details',
-            'icon' => 'bi-airplane',
+            'icon' => 'bi-airplane-fill',
             'href' => 'flights.php',
             'setting_key' => 'delegate_menu_flights_visible',
+            'badge' => 'NEW',
         ],
         'tshirt' => [
             'label' => 'T-Shirt Sizes',
