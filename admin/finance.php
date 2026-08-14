@@ -18,24 +18,26 @@ if ($filterRoomTypeId > 0) {
 
 $detailWhereSql = implode(' AND ', $detailConditions);
 
-$countryTotalsStmt = $pdo->query("SELECT
+$countryTotalsStmt = $pdo->prepare("SELECT
     u.id AS country_id,
     u.country_name,
     COUNT(DISTINCT b.id) AS booking_count,
+    COALESCE(SUM(b.rooms_reserved), 0) AS rooms_reserved,
     COALESCE(SUM(COALESCE(assignment_totals.assigned_athletes, 0)), 0) AS assigned_pax,
     COALESCE(SUM(COALESCE(b.rooms_reserved, 0) * COALESCE(rt.capacity, 1) * COALESCE(rt.price_per_night, 0) * GREATEST(1, DATEDIFF(b.booking_end_date, b.booking_start_date))), 0) AS total_amount
-    FROM users u
-    LEFT JOIN bookings b ON b.country_id = u.id AND b.status <> 'Cancelled'
-    LEFT JOIN championships c ON b.championship_id = c.id
-    LEFT JOIN room_types rt ON b.room_type_id = rt.id
+    FROM bookings b
+    JOIN users u ON u.id = b.country_id AND u.role = 'country_manager'
+    JOIN championships c ON b.championship_id = c.id
+    JOIN room_types rt ON b.room_type_id = rt.id
     LEFT JOIN (
         SELECT booking_id, COUNT(*) AS assigned_athletes
         FROM room_assignments
         GROUP BY booking_id
     ) assignment_totals ON assignment_totals.booking_id = b.id
-    WHERE u.role = 'country_manager'
+    WHERE {$detailWhereSql}
     GROUP BY u.id, u.country_name
     ORDER BY u.country_name ASC");
+$countryTotalsStmt->execute($detailParams);
 $countryTotals = $countryTotalsStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $detailStmt = $pdo->prepare("SELECT
@@ -146,6 +148,7 @@ require_once 'includes/header.php';
                         <tr>
                             <th>Country</th>
                             <th>Bookings</th>
+                            <th>Rooms Booked</th>
                             <th>Assigned Pax</th>
                             <th>Total Amount</th>
                         </tr>
@@ -155,6 +158,7 @@ require_once 'includes/header.php';
                             <tr>
                                 <td class="fw-semibold"><?php echo htmlspecialchars($row['country_name']); ?></td>
                                 <td><?php echo intval($row['booking_count']); ?></td>
+                                <td><?php echo intval($row['rooms_reserved']); ?></td>
                                 <td><?php echo intval($row['assigned_pax']); ?></td>
                                 <td class="fw-bold text-success">$<?php echo number_format($row['total_amount'], 2); ?></td>
                             </tr>

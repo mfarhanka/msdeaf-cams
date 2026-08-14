@@ -171,13 +171,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // Fetch all hotels and dynamically calculate total rooms from room types
 $hotels_stmt = $pdo->query("
-    SELECT h.id, h.name, h.address, h.star_rating, COALESCE(SUM(rt.total_allotment), 0) AS calculated_total_rooms 
-    FROM hotels h 
-    LEFT JOIN room_types rt ON h.id = rt.hotel_id 
-    GROUP BY h.id, h.name, h.address, h.star_rating 
+    SELECT h.id, h.name, h.address, h.star_rating,
+        COALESCE(SUM(rt.total_allotment), 0) AS calculated_total_rooms,
+        (SELECT COUNT(*) FROM bookings b WHERE b.hotel_id = h.id AND b.status <> 'Cancelled') AS booking_count
+    FROM hotels h
+    LEFT JOIN room_types rt ON h.id = rt.hotel_id
+    GROUP BY h.id, h.name, h.address, h.star_rating
     ORDER BY h.id DESC
 ");
 $hotels = $hotels_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$hotelCountrySummaryStmt = $pdo->query("SELECT
+    h.id AS hotel_id,
+    h.name AS hotel_name,
+    u.id AS country_id,
+    u.country_name,
+    COUNT(b.id) AS booking_count,
+    COALESCE(SUM(b.rooms_reserved), 0) AS total_rooms,
+    COALESCE(SUM(COALESCE(assignment_totals.assigned_pax, 0)), 0) AS total_pax
+    FROM bookings b
+    JOIN hotels h ON h.id = b.hotel_id
+    JOIN users u ON u.id = b.country_id
+    LEFT JOIN (
+        SELECT booking_id, COUNT(*) AS assigned_pax
+        FROM room_assignments
+        GROUP BY booking_id
+    ) assignment_totals ON assignment_totals.booking_id = b.id
+    WHERE b.status <> 'Cancelled'
+    GROUP BY h.id, h.name, u.id, u.country_name
+    ORDER BY h.name ASC, u.country_name ASC");
+$hotelCountrySummary = $hotelCountrySummaryStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$hotelSummaryTotals = [];
+foreach ($hotelCountrySummary as $summaryRow) {
+    $summaryHotelId = (int) $summaryRow['hotel_id'];
+    if (!isset($hotelSummaryTotals[$summaryHotelId])) {
+        $hotelSummaryTotals[$summaryHotelId] = ['rooms' => 0, 'pax' => 0];
+    }
+    $hotelSummaryTotals[$summaryHotelId]['rooms'] += (int) $summaryRow['total_rooms'];
+    $hotelSummaryTotals[$summaryHotelId]['pax'] += (int) $summaryRow['total_pax'];
+}
 
 $hotelChampionshipMap = [];
 foreach ($pdo->query("SELECT hotel_id, championship_id FROM championship_hotels ORDER BY championship_id")->fetchAll(PDO::FETCH_ASSOC) as $link) {
@@ -196,6 +229,57 @@ if ($selectedHotelId > 0) {
     }
 }
 
+$selectedHotelBookings = [];
+$selectedHotelGuests = [];
+if ($selectedHotelId > 0 && $selectedHotelName !== 'All Hotels') {
+    $hotelBookingsStmt = $pdo->prepare("SELECT
+        b.id,
+        b.rooms_reserved,
+        b.booking_start_date,
+        b.booking_end_date,
+        b.status,
+        u.country_name,
+        c.title AS championship_title,
+        rt.name AS room_type_name,
+        rt.capacity,
+        COALESCE(assignment_totals.assigned_athletes, 0) AS assigned_athletes
+        FROM bookings b
+        JOIN users u ON u.id = b.country_id
+        JOIN championships c ON c.id = b.championship_id
+        JOIN room_types rt ON rt.id = b.room_type_id
+        LEFT JOIN (
+            SELECT booking_id, COUNT(*) AS assigned_athletes
+            FROM room_assignments
+            GROUP BY booking_id
+        ) assignment_totals ON assignment_totals.booking_id = b.id
+        WHERE b.hotel_id = ? AND b.status <> 'Cancelled'
+        ORDER BY b.booking_start_date ASC, u.country_name ASC, rt.name ASC");
+    $hotelBookingsStmt->execute([$selectedHotelId]);
+    $selectedHotelBookings = $hotelBookingsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $hotelGuestsStmt = $pdo->prepare("SELECT
+        u.country_name,
+        a.first_name,
+        a.last_name,
+        a.participant_type,
+        a.gender,
+        c.title AS championship_title,
+        b.booking_start_date,
+        b.booking_end_date,
+        rt.name AS room_type_name,
+        ra.room_number
+        FROM room_assignments ra
+        JOIN bookings b ON b.id = ra.booking_id
+        JOIN athletes a ON a.id = ra.athlete_id
+        JOIN users u ON u.id = b.country_id
+        JOIN championships c ON c.id = b.championship_id
+        JOIN room_types rt ON rt.id = b.room_type_id
+        WHERE b.hotel_id = ? AND b.status <> 'Cancelled'
+        ORDER BY u.country_name ASC, a.last_name ASC, a.first_name ASC, b.booking_start_date ASC");
+    $hotelGuestsStmt->execute([$selectedHotelId]);
+    $selectedHotelGuests = $hotelGuestsStmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 if ($selectedHotelId > 0) {
     $room_types_stmt = $pdo->prepare("SELECT r.*, h.name as hotel_name FROM room_types r JOIN hotels h ON r.hotel_id = h.id WHERE r.hotel_id = ? ORDER BY r.name ASC");
     $room_types_stmt->execute([$selectedHotelId]);
@@ -206,6 +290,16 @@ $room_types = $room_types_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 require_once 'includes/header.php';
 ?>
+
+<style>
+@media print {
+    body * { visibility: hidden !important; }
+    #hotel-guests, #hotel-guests * { visibility: visible !important; }
+    #hotel-guests { position: absolute; inset: 0; width: 100%; margin: 0 !important; border: 0 !important; }
+    #hotel-guests button { display: none !important; }
+    #hotel-guests .table-responsive { overflow: visible !important; }
+}
+</style>
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Hotels & Pricing Management</h1>
@@ -230,6 +324,7 @@ require_once 'includes/header.php';
                         <th>Star Rate</th>
                         <th>Championships</th>
                         <th>Total Rooms</th>
+                        <th>Bookings</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -250,6 +345,16 @@ require_once 'includes/header.php';
                         </td>
                         <td><?php echo htmlspecialchars($h['calculated_total_rooms']); ?></td>
                         <td>
+                            <a href="hotels.php?hotel_id=<?php echo (int) $h['id']; ?>#hotel-bookings" class="text-decoration-none" title="View bookings for <?php echo htmlspecialchars($h['name']); ?>">
+                                <span class="badge <?php echo (int) $h['booking_count'] > 0 ? 'bg-primary' : 'bg-secondary'; ?>">
+                                    <?php echo (int) $h['booking_count']; ?>
+                                </span>
+                            </a>
+                        </td>
+                        <td>
+                            <a href="hotels.php?hotel_id=<?php echo (int) $h['id']; ?>#hotel-bookings" class="btn btn-sm btn-outline-success" title="View bookings">
+                                <i class="fas fa-calendar-check"></i>
+                            </a>
                             <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editHotelModal<?php echo (int) $h['id']; ?>">
                                 <i class="fas fa-pen"></i>
                             </button>
@@ -331,6 +436,171 @@ require_once 'includes/header.php';
         <?php endif; ?>
     </div>
 </div>
+
+<div class="card mt-4" id="hotel-country-summary">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-globe me-2"></i>Countries Staying at Each Hotel</h5>
+    </div>
+    <div class="card-body">
+        <?php if ($hotelCountrySummary !== []): ?>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Country</th>
+                            <th>Bookings</th>
+                            <th>Total Rooms</th>
+                            <th>Total Pax</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php $lastSummaryHotelId = 0; ?>
+                        <?php foreach ($hotelCountrySummary as $summaryRow): ?>
+                            <?php $summaryHotelId = (int) $summaryRow['hotel_id']; ?>
+                            <?php if ($lastSummaryHotelId !== 0 && $lastSummaryHotelId !== $summaryHotelId): ?>
+                                <tr class="table-info fw-bold">
+                                    <td colspan="2" class="text-end">Hotel Total</td>
+                                    <td><?php echo $hotelSummaryTotals[$lastSummaryHotelId]['rooms']; ?></td>
+                                    <td><?php echo $hotelSummaryTotals[$lastSummaryHotelId]['pax']; ?></td>
+                                </tr>
+                            <?php endif; ?>
+                            <?php if ($lastSummaryHotelId !== $summaryHotelId): ?>
+                                <tr class="table-primary">
+                                    <th colspan="4" class="fs-6">
+                                        <i class="fas fa-hotel me-2"></i>
+                                        <a href="hotels.php?hotel_id=<?php echo $summaryHotelId; ?>#hotel-bookings" class="text-decoration-none">
+                                            <?php echo htmlspecialchars($summaryRow['hotel_name']); ?>
+                                        </a>
+                                    </th>
+                                </tr>
+                            <?php endif; ?>
+                            <tr>
+                                <td class="fw-semibold"><?php echo htmlspecialchars($summaryRow['country_name']); ?></td>
+                                <td><?php echo (int) $summaryRow['booking_count']; ?></td>
+                                <td class="fw-semibold"><?php echo (int) $summaryRow['total_rooms']; ?></td>
+                                <td class="fw-semibold"><?php echo (int) $summaryRow['total_pax']; ?></td>
+                            </tr>
+                            <?php $lastSummaryHotelId = $summaryHotelId; ?>
+                        <?php endforeach; ?>
+                        <?php if ($lastSummaryHotelId !== 0): ?>
+                            <tr class="table-info fw-bold">
+                                <td colspan="2" class="text-end">Hotel Total</td>
+                                <td><?php echo $hotelSummaryTotals[$lastSummaryHotelId]['rooms']; ?></td>
+                                <td><?php echo $hotelSummaryTotals[$lastSummaryHotelId]['pax']; ?></td>
+                            </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+            <div class="small text-muted mt-2">Total pax counts participants assigned through Room Grouping. Cancelled bookings are excluded.</div>
+        <?php else: ?>
+            <div class="alert alert-info mb-0">No active hotel bookings found.</div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php if ($selectedHotelId > 0 && $selectedHotelName !== 'All Hotels'): ?>
+<div class="card mt-4 border-primary" id="hotel-bookings">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-calendar-check me-2"></i>Bookings — <?php echo htmlspecialchars($selectedHotelName); ?></h5>
+        <div class="d-flex gap-2">
+            <a href="#hotel-guests" class="btn btn-light btn-sm text-primary">
+                <i class="fas fa-users me-1"></i>Guest List
+            </a>
+            <a href="finance.php?hotel_id=<?php echo (int) $selectedHotelId; ?>" class="btn btn-light btn-sm text-success">
+                <i class="fas fa-chart-bar me-1"></i>Country Totals
+            </a>
+            <a href="hotels.php#hotels" class="btn btn-light btn-sm text-primary">Close List</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <?php if ($selectedHotelBookings !== []): ?>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Country</th>
+                            <th>Championship</th>
+                            <th>Stay Dates</th>
+                            <th>Room Type</th>
+                            <th>Rooms Booked</th>
+                            <th>Capacity</th>
+                            <th>Assigned Guests</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($selectedHotelBookings as $booking): ?>
+                            <tr>
+                                <td class="fw-semibold"><?php echo htmlspecialchars($booking['country_name']); ?></td>
+                                <td><?php echo htmlspecialchars($booking['championship_title']); ?></td>
+                                <td><?php echo htmlspecialchars(date('M d, Y', strtotime($booking['booking_start_date'])) . ' – ' . date('M d, Y', strtotime($booking['booking_end_date']))); ?></td>
+                                <td><?php echo htmlspecialchars($booking['room_type_name']); ?></td>
+                                <td class="fw-semibold"><?php echo (int) $booking['rooms_reserved']; ?></td>
+                                <td><?php echo (int) $booking['capacity']; ?> pax/room</td>
+                                <td><?php echo (int) $booking['assigned_athletes']; ?></td>
+                                <td><span class="badge bg-success"><?php echo htmlspecialchars($booking['status']); ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="alert alert-info mb-0">No active bookings for this hotel.</div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card mt-4 border-info" id="hotel-guests">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-0"><i class="fas fa-users me-2"></i>Guest List — <?php echo htmlspecialchars($selectedHotelName); ?></h5>
+            <small><?php echo count($selectedHotelGuests); ?> assigned guest(s)</small>
+        </div>
+        <button type="button" class="btn btn-light btn-sm text-info" onclick="window.print()">
+            <i class="fas fa-print me-1"></i>Print Record
+        </button>
+    </div>
+    <div class="card-body">
+        <?php if ($selectedHotelGuests !== []): ?>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>No.</th>
+                            <th>Country</th>
+                            <th>Guest Name</th>
+                            <th>Type</th>
+                            <th>Gender</th>
+                            <th>Championship</th>
+                            <th>Stay Dates</th>
+                            <th>Room Type</th>
+                            <th>Room</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($selectedHotelGuests as $guestIndex => $guest): ?>
+                            <tr>
+                                <td><?php echo $guestIndex + 1; ?></td>
+                                <td class="fw-semibold"><?php echo htmlspecialchars($guest['country_name']); ?></td>
+                                <td><?php echo htmlspecialchars(trim($guest['first_name'] . ' ' . $guest['last_name'])); ?></td>
+                                <td><?php echo htmlspecialchars(ucfirst($guest['participant_type'] ?? 'athlete')); ?></td>
+                                <td><?php echo htmlspecialchars($guest['gender']); ?></td>
+                                <td><?php echo htmlspecialchars($guest['championship_title']); ?></td>
+                                <td><?php echo htmlspecialchars(date('M d, Y', strtotime($guest['booking_start_date'])) . ' – ' . date('M d, Y', strtotime($guest['booking_end_date']))); ?></td>
+                                <td><?php echo htmlspecialchars($guest['room_type_name']); ?></td>
+                                <td><?php echo htmlspecialchars($guest['room_number'] ?: 'Not set'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="alert alert-info mb-0">No guests have been assigned to this hotel yet. Country managers must assign participants through Room Grouping before names appear here.</div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Room Types Management Section (Pricing) -->
 <div class="card mt-4" id="room_types">
