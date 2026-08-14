@@ -21,6 +21,12 @@ function getDelegateMenuItems(): array
             'href' => 'passport.php',
             'setting_key' => 'delegate_menu_passport_visible',
         ],
+        'flights' => [
+            'label' => 'Flight Details',
+            'icon' => 'bi-airplane',
+            'href' => 'flights.php',
+            'setting_key' => 'delegate_menu_flights_visible',
+        ],
         'tshirt' => [
             'label' => 'T-Shirt Sizes',
             'icon' => 'bi-tag',

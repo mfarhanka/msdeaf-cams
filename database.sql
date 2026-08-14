@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS athletes (
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     gender ENUM('M', 'F', 'Other') NOT NULL,
+    participant_type ENUM('athlete', 'official') NOT NULL DEFAULT 'athlete',
     tshirt_size VARCHAR(10) NULL,
     sport_category VARCHAR(100) NOT NULL,
     passport_number VARCHAR(255) NOT NULL, -- In real app, this should be encrypted
@@ -137,16 +138,33 @@ CREATE TABLE IF NOT EXISTS room_assignments (
     FOREIGN KEY (athlete_id) REFERENCES athletes(id) ON DELETE CASCADE
 );
 
--- Insert Default Admin User (Password is 'admin123')
-INSERT IGNORE INTO users (username, password, role, status) VALUES ('admin', '$2y$10$TzJaQ78Qxa8YHjTGwZazdexzPGIENiwkfIfhezgeFvEVCMVNCWl06', 'admin', 'active');
--- Insert Default Country Manager (Password is 'usa123')
-INSERT IGNORE INTO users (username, password, role, status, country_name) VALUES ('usa', '$2y$10$ozllFh7PXvKC6396PGprX.pr1f9IUUCCZoEmVIIm4O/p2gzeDd1pO', 'country_manager', 'active', 'USA');
+-- Independent arrival and departure groups per delegation
+CREATE TABLE IF NOT EXISTS delegation_flight_movements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    country_id INT NOT NULL,
+    direction ENUM('arrival', 'departure') NOT NULL,
+    pax INT UNSIGNED NOT NULL,
+    flight_number VARCHAR(30) NOT NULL,
+    flight_datetime DATETIME NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_flight_movements_country (country_id, direction),
+    FOREIGN KEY (country_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS delegation_flight_movement_members (
+    movement_id INT NOT NULL,
+    athlete_id INT NOT NULL,
+    PRIMARY KEY (movement_id, athlete_id),
+    FOREIGN KEY (movement_id) REFERENCES delegation_flight_movements(id) ON DELETE CASCADE,
+    FOREIGN KEY (athlete_id) REFERENCES athletes(id) ON DELETE CASCADE
+);
 
 INSERT INTO app_settings (setting_key, setting_value)
 VALUES
     ('delegate_menu_dashboard_visible', '1'),
     ('delegate_menu_athletes_visible', '1'),
     ('delegate_menu_passport_visible', '1'),
+    ('delegate_menu_flights_visible', '1'),
     ('delegate_menu_tshirt_visible', '1'),
     ('delegate_menu_book_visible', '1'),
     ('delegate_menu_rooming_visible', '1'),
