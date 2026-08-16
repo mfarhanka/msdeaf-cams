@@ -41,6 +41,7 @@ function ensureInvoiceSchema(PDO $pdo): void
         invoice_id INT NOT NULL,
         country_id INT NOT NULL,
         amount DECIMAL(12,2) NOT NULL,
+        payment_type ENUM('deposit','balance','full') NOT NULL DEFAULT 'deposit',
         original_filename VARCHAR(255) NOT NULL,
         mime_type VARCHAR(80) NOT NULL,
         slip_data LONGBLOB NOT NULL,
@@ -57,6 +58,8 @@ function ensureInvoiceSchema(PDO $pdo): void
         CONSTRAINT fk_invoice_payments_country FOREIGN KEY (country_id) REFERENCES users(id),
         CONSTRAINT fk_invoice_payments_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $paymentColumns=$pdo->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='invoice_payments'")->fetchAll(PDO::FETCH_COLUMN);
+    if(!in_array('payment_type',$paymentColumns,true)){$pdo->exec("ALTER TABLE invoice_payments ADD COLUMN payment_type ENUM('deposit','balance','full') NOT NULL DEFAULT 'deposit' AFTER amount");}
 }
 
 function invoiceSettingDefaults(): array
@@ -161,7 +164,8 @@ function generateInvoicePdf(array $s, string $number, string $issuedAt, ?array $
         $lineRight($s['settings']['invoice_org_name'],$headerRight,13,true); $y-=16; $lineRight($s['settings']['invoice_org_name_en'],$headerRight,12,true); $y-=15;
         $lineRight($s['settings']['invoice_address'],$headerRight,8); $y-=12; $lineRight('Tel '.$s['settings']['invoice_phone'].'   Fax '.$s['settings']['invoice_fax'],$headerRight,8); $y-=12;
         $lineRight('E-mail: '.$s['settings']['invoice_email'].'   Website: '.$s['settings']['invoice_website'],$headerRight,8); $y-=23; $rule($y); $y-=25;
-        $line($payment===null?'PROFORMA INVOICE':'PAID INVOICE',405,13,true); $y-=22; $line($s['country']['country_name'] ?: $s['country']['username'],35,11,true);
+        $paidTitles=['deposit'=>'DEPOSIT PAID INVOICE','balance'=>'BALANCE PAID INVOICE','full'=>'FULL PAID INVOICE'];$documentTitle=$payment===null?'PROFORMA INVOICE':($paidTitles[$payment['payment_type']??'deposit']??'PAID INVOICE');
+        $line($documentTitle,365,13,true); $y-=22; $line($s['country']['country_name'] ?: $s['country']['username'],35,11,true);
         $line('Invoice No: '.$number,365,9,true); $y-=14; $line('Terms: '.$s['settings']['invoice_terms'],365,9); $y-=14; $line('Date: '.date('d.m.Y',strtotime($issuedAt)),365,9); $y-=22; $rule($y); $y-=18;
         $line('No',35,9,true); $line('Description',75,9,true); $line('Quantity',330,9,true); $line('Night',400,9,true); $line('Price / Unit (USD)',438,8,true); $line('Total (USD)',520,8,true); $y-=12; $rule($y); $y-=18;
     };
@@ -178,7 +182,7 @@ function generateInvoicePdf(array $s, string $number, string $issuedAt, ?array $
     $line('BANK DETAILS',35,9,true); $line('TOTAL AMOUNT:',365,10,true); $line('USD $ '.number_format($s['total'],2),490,11,true); $y-=14;
     $line('DEPOSIT '.number_format($depositPercent,0).'%:',365,10,true);$line('USD $ '.number_format($depositAmount,2),490,10,true);$y-=14;
     $line('BALANCE PAYMENT:',365,10,true);$line('USD $ '.number_format($balanceAmount,2),490,10,true);$y-=14;
-    if($payment!==null){$line('PAYMENT STATUS:',365,10,true);$line('PAID',520,10,true);$y-=14;$line('Accepted: '.date('d.m.Y',strtotime($payment['reviewed_at'])),365,8);$y-=12;}
+    if($payment!==null){$received=(float)($payment['amount']??0);$totalPaid=(float)($payment['cumulative_paid']??$received);$remaining=max(0,(float)$s['total']-$totalPaid);$line('PAYMENT RECEIVED:',345,9,true);$line('USD $ '.number_format($received,2),490,9,true);$y-=13;$line('TOTAL PAID:',365,9,true);$line('USD $ '.number_format($totalPaid,2),490,9,true);$y-=13;$line('BALANCE DUE:',365,9,true);$line('USD $ '.number_format($remaining,2),490,9,true);$y-=13;$line('STATUS:',365,9,true);$line($remaining<=0.005?'FULLY PAID':'DEPOSIT PAID',490,9,true);$y-=13;$line('Accepted: '.date('d.m.Y',strtotime($payment['reviewed_at'])),365,8);$y-=12;}
     foreach(['Bank Account'=>'invoice_bank_account','Bank Name'=>'invoice_bank_name','Account No'=>'invoice_account_no','Branch Name'=>'invoice_branch_name','Swift Code'=>'invoice_swift_code','Branch Code'=>'invoice_branch_code'] as $label=>$key){$line($label.': '.$s['settings'][$key],35,8,$label==='Bank Name');$y-=12;}
     $y-=8; $line('Please send the transaction slip to: '.$s['settings']['invoice_payment_email'],35,8,true);
     if($content!=='')$pages[]=$content;
@@ -222,6 +226,16 @@ function getInvoiceDepositAmount(array $snapshot): float
     $percent=max(0,min(100,(float)($snapshot['settings']['invoice_deposit_percent']??70)));return round((float)$snapshot['total']*$percent/100,2);
 }
 
+function getInvoicePaymentAmounts(array $snapshot): array
+{
+    $total=round((float)$snapshot['total'],2);$deposit=getInvoiceDepositAmount($snapshot);return ['deposit'=>$deposit,'balance'=>round($total-$deposit,2),'full'=>$total];
+}
+
+function getInvoicePaymentState(PDO $pdo,int $invoiceId):array
+{
+    $stmt=$pdo->prepare("SELECT payment_type,status,amount FROM invoice_payments WHERE invoice_id=? ORDER BY id");$stmt->execute([$invoiceId]);$rows=$stmt->fetchAll(PDO::FETCH_ASSOC);$accepted=[];$pending=[];$paid=0.0;foreach($rows as $row){if($row['status']==='Accepted'){$accepted[$row['payment_type']]=true;$paid+=(float)$row['amount'];}elseif($row['status']==='Pending'){$pending[$row['payment_type']]=true;}}$fullyPaid=isset($accepted['full'])||(isset($accepted['deposit'])&&isset($accepted['balance']));return ['accepted'=>$accepted,'pending'=>$pending,'total_paid'=>$paid,'status'=>$fullyPaid?'Fully Paid':(isset($accepted['deposit'])?'Deposit Paid':'Unpaid')];
+}
+
 function sendPaymentSlip(PDO $pdo,int $paymentId,?int $countryId=null):void
 {
     ensureInvoiceSchema($pdo);$sql='SELECT original_filename,mime_type,slip_data FROM invoice_payments WHERE id=?';$params=[$paymentId];if($countryId!==null){$sql.=' AND country_id=?';$params[]=$countryId;}$stmt=$pdo->prepare($sql);$stmt->execute($params);$p=$stmt->fetch(PDO::FETCH_ASSOC);if(!$p){http_response_code(404);exit('Payment slip not found.');}$name=preg_replace('/[^A-Za-z0-9._-]/','-',basename($p['original_filename']));header('Content-Type: '.$p['mime_type']);header('Content-Disposition: attachment; filename="'.$name.'"');header('Content-Length: '.strlen($p['slip_data']));header('X-Content-Type-Options: nosniff');echo $p['slip_data'];exit;
@@ -229,5 +243,5 @@ function sendPaymentSlip(PDO $pdo,int $paymentId,?int $countryId=null):void
 
 function sendPaidInvoicePdf(PDO $pdo,int $paymentId,?int $countryId=null):void
 {
-    ensureInvoiceSchema($pdo);$sql='SELECT p.paid_invoice_pdf,i.invoice_number FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id WHERE p.id=? AND p.status=\'Accepted\' AND p.paid_invoice_pdf IS NOT NULL';$params=[$paymentId];if($countryId!==null){$sql.=' AND p.country_id=?';$params[]=$countryId;}$stmt=$pdo->prepare($sql);$stmt->execute($params);$p=$stmt->fetch(PDO::FETCH_ASSOC);if(!$p){http_response_code(404);exit('Paid invoice not found.');}$name=preg_replace('/[^A-Za-z0-9._-]/','-',$p['invoice_number']).'-PAID.pdf';header('Content-Type: application/pdf');header('Content-Disposition: attachment; filename="'.$name.'"');header('Content-Length: '.strlen($p['paid_invoice_pdf']));header('X-Content-Type-Options: nosniff');echo $p['paid_invoice_pdf'];exit;
+    ensureInvoiceSchema($pdo);$sql='SELECT p.paid_invoice_pdf,p.payment_type,i.invoice_number FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id WHERE p.id=? AND p.status=\'Accepted\' AND p.paid_invoice_pdf IS NOT NULL';$params=[$paymentId];if($countryId!==null){$sql.=' AND p.country_id=?';$params[]=$countryId;}$stmt=$pdo->prepare($sql);$stmt->execute($params);$p=$stmt->fetch(PDO::FETCH_ASSOC);if(!$p){http_response_code(404);exit('Paid invoice not found.');}$name=preg_replace('/[^A-Za-z0-9._-]/','-',$p['invoice_number']).'-'.strtoupper($p['payment_type']).'-PAID.pdf';header('Content-Type: application/pdf');header('Content-Disposition: attachment; filename="'.$name.'"');header('Content-Length: '.strlen($p['paid_invoice_pdf']));header('X-Content-Type-Options: nosniff');echo $p['paid_invoice_pdf'];exit;
 }
