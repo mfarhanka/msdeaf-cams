@@ -165,6 +165,7 @@ function generateInvoicePdf(array $s, string $number, string $issuedAt, ?array $
         $lineRight($s['settings']['invoice_address'],$headerRight,8); $y-=12; $lineRight('Tel '.$s['settings']['invoice_phone'].'   Fax '.$s['settings']['invoice_fax'],$headerRight,8); $y-=12;
         $lineRight('E-mail: '.$s['settings']['invoice_email'].'   Website: '.$s['settings']['invoice_website'],$headerRight,8); $y-=23; $rule($y); $y-=25;
         $paidTitles=['deposit'=>'DEPOSIT PAID RECEIPT','balance'=>'BALANCE PAID RECEIPT','full'=>'FULL PAID RECEIPT'];$documentTitle=$payment===null?'PROFORMA INVOICE':($paidTitles[$payment['payment_type']??'deposit']??'PAID RECEIPT');
+        if($payment!==null){$stampX=285;$stampY=$y-7;$content.="q 1 0 0 RG 2 w $stampX $stampY 62 23 re S Q\n1 0 0 rg BT /F2 13 Tf 300 ".($stampY+6)." Td (PAID) Tj ET 0 0 0 rg\n";}
         $line($documentTitle,365,13,true); $y-=22; $line($s['country']['country_name'] ?: $s['country']['username'],35,11,true);
         $line('Invoice No: '.$number,365,9,true); $y-=14; $line('Terms: '.$s['settings']['invoice_terms'],365,9); $y-=14; $line('Date: '.date('d.m.Y',strtotime($issuedAt)),365,9); $y-=22; $rule($y); $y-=18;
         $line('No',35,9,true); $line('Description',75,9,true); $lineRight('Quantity',365,9,true); $lineRight('Night',425,9,true); $lineRight('Price / Unit (USD)',505,8,true); $lineRight('Total (USD)',567,8,true); $y-=12; $rule($y); $y-=18;
@@ -174,8 +175,6 @@ function generateInvoicePdf(array $s, string $number, string $issuedAt, ?array $
     if($s['participant_count']>0) $row($i++,'PARTICIPATION FEE',$s['participant_count'],'',$s['settings']['invoice_participation_fee'],$s['participation_total']);
     foreach($s['bookings'] as $b) {
         $row($i++,$b['hotel_name'].' - '.$b['room_type_name'],$b['charged_pax'],$b['nights'],$b['price_per_night'],$b['line_total'],true);
-        $line('Stay: '.date('d M Y',strtotime($b['booking_start_date'])).' to '.date('d M Y',strtotime($b['booking_end_date'])),90,8); $y-=13;
-        foreach($b['participants'] as $p) { if($y<150)$newPage(); $line('- '.$p['name'].($p['room_number']?' (Room '.$p['room_number'].')':''),100,8); $y-=12; }
     }
     if($y<175)$newPage(); $y-=8; $rule($y); $y-=22; $line('DOLLARS: '.invoiceAmountWords($s['total']),30,9,true); $y-=28; $rule($y); $y-=18;
     $depositPercent=max(0,min(100,(float)($s['settings']['invoice_deposit_percent']??70)));$depositAmount=round($s['total']*$depositPercent/100,2);$balanceAmount=$s['total']-$depositAmount;
