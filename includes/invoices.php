@@ -140,9 +140,9 @@ function generateInvoicePdf(array $s, string $number, string $issuedAt): string
         $lineRight('E-mail: '.$s['settings']['invoice_email'].'   Website: '.$s['settings']['invoice_website'],$headerRight,8); $y-=23; $rule($y); $y-=25;
         $line('PROFORMA INVOICE',405,13,true); $y-=22; $line($s['country']['country_name'] ?: $s['country']['username'],35,11,true);
         $line('Invoice No: '.$number,365,9,true); $y-=14; $line('Terms: '.$s['settings']['invoice_terms'],365,9); $y-=14; $line('Date: '.date('d.m.Y',strtotime($issuedAt)),365,9); $y-=22; $rule($y); $y-=18;
-        $line('No',35,9,true); $line('Description',75,9,true); $line('Quantity',330,9,true); $line('Night',400,9,true); $line('Price / Unit',445,9,true); $line('Total',535,9,true); $y-=12; $rule($y); $y-=18;
+        $line('No',35,9,true); $line('Description',75,9,true); $line('Quantity',330,9,true); $line('Night',400,9,true); $line('Price / Unit (USD)',438,8,true); $line('Total (USD)',520,8,true); $y-=12; $rule($y); $y-=18;
     };
-    $row=function($no,$desc,$qty,$nights,$unit,$total,$bold=false) use (&$y,&$line,$newPage) { if($y<150)$newPage(); $line($no,38,9); $line($desc,75,9,$bold); $line($qty,345,9); $line($nights,410,9); $line(number_format((float)$unit,2),465,9); $line(number_format((float)$total,2),535,9); $y-=17; };
+    $row=function($no,$desc,$qty,$nights,$unit,$total,$bold=false) use (&$y,&$line,$newPage) { if($y<150)$newPage(); $line($no,38,9); $line($desc,75,9,$bold); $line($qty,345,9); $line($nights,410,9); $line('$ '.number_format((float)$unit,2),455,9); $line('$ '.number_format((float)$total,2),520,9); $y-=17; };
     $newPage(); $i=1;
     if($s['participant_count']>0) $row($i++,'PARTICIPATION FEE',$s['participant_count'],'',$s['settings']['invoice_participation_fee'],$s['participation_total']);
     foreach($s['bookings'] as $b) {
@@ -151,7 +151,7 @@ function generateInvoicePdf(array $s, string $number, string $issuedAt): string
         foreach($b['participants'] as $p) { if($y<150)$newPage(); $line('- '.$p['name'].($p['room_number']?' (Room '.$p['room_number'].')':''),100,8); $y-=12; }
     }
     if($y<175)$newPage(); $y-=8; $rule($y); $y-=22; $line('DOLLARS: '.invoiceAmountWords($s['total']),30,9,true); $y-=28; $rule($y); $y-=18;
-    $line('BANK DETAILS',35,9,true); $line('TOTAL AMOUNT:',395,10,true); $line(number_format($s['total'],2),525,11,true); $y-=14;
+    $line('BANK DETAILS',35,9,true); $line('TOTAL AMOUNT:',365,10,true); $line('USD $ '.number_format($s['total'],2),490,11,true); $y-=14;
     foreach(['Bank Account'=>'invoice_bank_account','Bank Name'=>'invoice_bank_name','Account No'=>'invoice_account_no','Branch Name'=>'invoice_branch_name','Swift Code'=>'invoice_swift_code','Branch Code'=>'invoice_branch_code'] as $label=>$key){$line($label.': '.$s['settings'][$key],35,8,$label==='Bank Name');$y-=12;}
     $y-=8; $line('Please send the transaction slip to: '.$s['settings']['invoice_payment_email'],35,8,true);
     if($content!=='')$pages[]=$content;
