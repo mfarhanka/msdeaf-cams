@@ -73,12 +73,23 @@ $participantsStmt = $pdo->prepare("SELECT a.first_name, a.last_name, a.gender,
 $participantsStmt->execute([$countryId]);
 $participants = $participantsStmt->fetchAll(PDO::FETCH_ASSOC);
 
+require_once '../includes/invoices.php';
+ensureInvoiceSchema($pdo);
+$invoiceStmt = $pdo->prepare("SELECT id, invoice_number, issued_at, currency, total_amount, revision_of_id FROM invoices WHERE country_id = ? ORDER BY issued_at DESC, id DESC");
+$invoiceStmt->execute([$countryId]);
+$invoices = $invoiceStmt->fetchAll(PDO::FETCH_ASSOC);
+
 require_once 'includes/header.php';
 ?>
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Financial Summary</h1>
+    <?php if ($invoices !== []): ?><a class="btn btn-primary" href="invoice_download.php?id=<?php echo (int)$invoices[0]['id']; ?>"><i class="bi bi-file-earmark-pdf me-1"></i>Download Latest Invoice</a><?php endif; ?>
 </div>
+
+<?php if ($invoices !== []): ?>
+<div class="card shadow-sm mb-3"><div class="card-header">Issued Proforma Invoices</div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Invoice</th><th>Issued</th><th>Type</th><th>Total</th><th></th></tr></thead><tbody><?php foreach($invoices as $invoice): ?><tr><td class="fw-semibold"><?php echo htmlspecialchars($invoice['invoice_number']); ?></td><td><?php echo htmlspecialchars(date('d M Y H:i',strtotime($invoice['issued_at']))); ?></td><td><?php echo $invoice['revision_of_id']?'<span class="badge text-bg-info">Revision</span>':'Original'; ?></td><td><?php echo htmlspecialchars($invoice['currency']).' '.number_format((float)$invoice['total_amount'],2); ?></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="invoice_download.php?id=<?php echo (int)$invoice['id']; ?>">Download PDF</a></td></tr><?php endforeach; ?></tbody></table></div></div>
+<?php endif; ?>
 
 <div class="row g-3 mb-3">
     <div class="col-md-4">

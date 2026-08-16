@@ -170,6 +170,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <a class="nav-link w-100 text-start <?php echo $current_page == 'admins.php' ? 'active' : ''; ?>" href="admins.php"><i class="bi bi-shield-lock me-2"></i>Admins</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'championships.php' ? 'active' : ''; ?>" href="championships.php"><i class="bi bi-trophy me-2"></i>Championships</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'hotels.php' ? 'active' : ''; ?>" href="hotels.php"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'invoices.php' ? 'active' : ''; ?>" href="invoices.php"><i class="bi bi-receipt me-2"></i>Invoices</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'delegations.php' ? 'active' : ''; ?>" href="delegations.php"><i class="bi bi-globe me-2"></i>Delegations</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php"><i class="bi bi-megaphone me-2"></i>Announcements</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'activity_logs.php' ? 'active' : ''; ?>" href="activity_logs.php"><i class="bi bi-journal-text me-2"></i>Activity Logs</a>
@@ -194,6 +195,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'admins.php' ? 'active' : ''; ?>" href="admins.php"><i class="bi bi-shield-lock me-2"></i>Admins</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'championships.php' ? 'active' : ''; ?>" href="championships.php"><i class="bi bi-trophy me-2"></i>Championships</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'hotels.php' ? 'active' : ''; ?>" href="hotels.php"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</a>
+                    <a class="nav-link w-100 text-start <?php echo $current_page == 'invoices.php' ? 'active' : ''; ?>" href="invoices.php"><i class="bi bi-receipt me-2"></i>Invoices</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'delegations.php' ? 'active' : ''; ?>" href="delegations.php"><i class="bi bi-globe me-2"></i>Delegations</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php"><i class="bi bi-megaphone me-2"></i>Announcements</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'activity_logs.php' ? 'active' : ''; ?>" href="activity_logs.php"><i class="bi bi-journal-text me-2"></i>Activity Logs</a>

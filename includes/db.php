@@ -284,6 +284,8 @@ try {
         ensureActivityLogTable($pdo);
         ensureAppSettingsTable($pdo);
         ensureAnnouncementsTable($pdo);
+        require_once __DIR__ . '/invoices.php';
+        ensureInvoiceSchema($pdo);
     }
 } catch(Exception $e) {
     error_log('Database connection failed: ' . json_encode([
