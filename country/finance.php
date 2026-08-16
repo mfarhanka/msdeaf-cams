@@ -1,7 +1,21 @@
 <?php
 require_once 'includes/auth.php';
+require_once '../includes/invoices.php';
+ensureInvoiceSchema($pdo);
 
 $countryId = $_SESSION['id'];
+if(empty($_SESSION['payment_csrf']))$_SESSION['payment_csrf']=bin2hex(random_bytes(32));
+if($_SERVER['REQUEST_METHOD']==='POST'&&($_POST['action']??'')==='upload_payment_slip'){
+    try{
+        $token=$_POST['csrf_token']??'';if(!is_string($token)||!hash_equals($_SESSION['payment_csrf'],$token))throw new RuntimeException('The request expired. Please try again.');
+        $invoiceId=(int)($_POST['invoice_id']??0);$invoiceStmt=$pdo->prepare('SELECT snapshot_json FROM invoices WHERE id=? AND country_id=?');$invoiceStmt->execute([$invoiceId,$countryId]);$snapshotJson=$invoiceStmt->fetchColumn();if($snapshotJson===false)throw new RuntimeException('Invoice not found.');
+        $file=$_FILES['payment_slip']??null;if(!$file||$file['error']!==UPLOAD_ERR_OK)throw new RuntimeException('Please select a payment slip to upload.');if((int)$file['size']>8*1024*1024)throw new RuntimeException('Payment slip must not exceed 8 MB.');
+        $finfo=new finfo(FILEINFO_MIME_TYPE);$mime=$finfo->file($file['tmp_name']);$allowed=['application/pdf','image/jpeg','image/png'];if(!in_array($mime,$allowed,true))throw new RuntimeException('Payment slip must be a PDF, JPEG, or PNG file.');
+        $existing=$pdo->prepare("SELECT COUNT(*) FROM invoice_payments WHERE invoice_id=? AND country_id=? AND status IN ('Pending','Accepted')");$existing->execute([$invoiceId,$countryId]);if((int)$existing->fetchColumn()>0)throw new RuntimeException('A pending or accepted payment already exists for this invoice.');
+        $snapshot=json_decode($snapshotJson,true,512,JSON_THROW_ON_ERROR);$amount=getInvoiceDepositAmount($snapshot);$data=file_get_contents($file['tmp_name']);$stmt=$pdo->prepare('INSERT INTO invoice_payments(invoice_id,country_id,amount,original_filename,mime_type,slip_data) VALUES(?,?,?,?,?,?)');$stmt->bindValue(1,$invoiceId,PDO::PARAM_INT);$stmt->bindValue(2,$countryId,PDO::PARAM_INT);$stmt->bindValue(3,$amount);$stmt->bindValue(4,substr(basename($file['name']),0,255));$stmt->bindValue(5,$mime);$stmt->bindValue(6,$data,PDO::PARAM_LOB);$stmt->execute();
+        $actor=getActorDetailsFromSession();recordActivity($pdo,'upload_payment_slip','invoice_payment',(int)$pdo->lastInsertId(),'Uploaded a deposit payment slip',['invoice_id'=>$invoiceId,'amount'=>$amount],$actor['id'],$actor['role'],$actor['username']);$msg='<div class="alert alert-success">Payment slip uploaded for admin review.</div>';
+    }catch(Throwable $e){$msg='<div class="alert alert-danger">'.htmlspecialchars($e->getMessage()).'</div>';}
+}
 
 $roomStmt = $pdo->prepare("SELECT COALESCE(SUM(rooms_reserved), 0) FROM bookings WHERE country_id = ? AND status <> 'Cancelled'");
 $roomStmt->execute([$countryId]);
@@ -73,11 +87,11 @@ $participantsStmt = $pdo->prepare("SELECT a.first_name, a.last_name, a.gender,
 $participantsStmt->execute([$countryId]);
 $participants = $participantsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-require_once '../includes/invoices.php';
-ensureInvoiceSchema($pdo);
-$invoiceStmt = $pdo->prepare("SELECT id, invoice_number, issued_at, currency, total_amount, revision_of_id FROM invoices WHERE country_id = ? ORDER BY issued_at DESC, id DESC");
+$invoiceStmt = $pdo->prepare("SELECT id, invoice_number, issued_at, currency, total_amount, revision_of_id, snapshot_json FROM invoices WHERE country_id = ? ORDER BY issued_at DESC, id DESC");
 $invoiceStmt->execute([$countryId]);
 $invoices = $invoiceStmt->fetchAll(PDO::FETCH_ASSOC);
+foreach($invoices as &$issuedInvoice){$issuedSnapshot=json_decode($issuedInvoice['snapshot_json'],true);$issuedInvoice['deposit_amount']=is_array($issuedSnapshot)?getInvoiceDepositAmount($issuedSnapshot):round((float)$issuedInvoice['total_amount']*.70,2);}unset($issuedInvoice);
+$paymentStmt=$pdo->prepare('SELECT id,invoice_id,amount,status,admin_note,created_at,paid_invoice_generated_at FROM invoice_payments WHERE country_id=? ORDER BY created_at DESC,id DESC');$paymentStmt->execute([$countryId]);$paymentsByInvoice=[];foreach($paymentStmt->fetchAll(PDO::FETCH_ASSOC) as $payment){if(!isset($paymentsByInvoice[(int)$payment['invoice_id']]))$paymentsByInvoice[(int)$payment['invoice_id']]=$payment;}
 
 require_once 'includes/header.php';
 ?>
@@ -88,7 +102,7 @@ require_once 'includes/header.php';
 </div>
 
 <?php if ($invoices !== []): ?>
-<div class="card shadow-sm mb-3"><div class="card-header">Issued Proforma Invoices</div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Invoice</th><th>Issued</th><th>Type</th><th>Total</th><th></th></tr></thead><tbody><?php foreach($invoices as $invoice): ?><tr><td class="fw-semibold"><?php echo htmlspecialchars($invoice['invoice_number']); ?></td><td><?php echo htmlspecialchars(date('d M Y H:i',strtotime($invoice['issued_at']))); ?></td><td><?php echo $invoice['revision_of_id']?'<span class="badge text-bg-info">Revision</span>':'Original'; ?></td><td><?php echo htmlspecialchars($invoice['currency']).' '.number_format((float)$invoice['total_amount'],2); ?></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="invoice_download.php?id=<?php echo (int)$invoice['id']; ?>">Download PDF</a></td></tr><?php endforeach; ?></tbody></table></div></div>
+<div class="card shadow-sm mb-3"><div class="card-header">Issued Proforma Invoices</div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Invoice</th><th>Issued</th><th>Total / Deposit</th><th>Payment</th><th></th></tr></thead><tbody><?php foreach($invoices as $invoice):$payment=$paymentsByInvoice[(int)$invoice['id']]??null; ?><tr><td class="fw-semibold"><?php echo htmlspecialchars($invoice['invoice_number']); ?></td><td><?php echo htmlspecialchars(date('d M Y H:i',strtotime($invoice['issued_at']))); ?></td><td><?php echo htmlspecialchars($invoice['currency']).' $ '.number_format((float)$invoice['total_amount'],2); ?><div class="small text-muted">Deposit: USD $ <?php echo number_format($payment?(float)$payment['amount']:(float)$invoice['deposit_amount'],2); ?></div></td><td><?php if($payment):?><span class="badge <?php echo $payment['status']==='Accepted'?'text-bg-success':($payment['status']==='Rejected'?'text-bg-danger':'text-bg-warning'); ?>"><?php echo htmlspecialchars($payment['status']); ?></span><a class="small ms-1" href="payment_slip_download.php?id=<?php echo (int)$payment['id']; ?>">Slip</a><?php if($payment['admin_note']):?><div class="small text-muted"><?php echo htmlspecialchars($payment['admin_note']); ?></div><?php endif;?><?php else:?><span class="text-muted">Not submitted</span><?php endif;?></td><td class="text-end"><div class="d-flex flex-column gap-1 align-items-end"><a class="btn btn-sm btn-outline-primary" href="invoice_download.php?id=<?php echo (int)$invoice['id']; ?>">Proforma PDF</a><?php if($payment&&$payment['paid_invoice_generated_at']):?><a class="btn btn-sm btn-success" href="paid_invoice_download.php?id=<?php echo (int)$payment['id']; ?>">Paid Invoice</a><?php elseif(!$payment||$payment['status']==='Rejected'):?><form method="post" enctype="multipart/form-data" class="d-flex gap-1"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['payment_csrf']); ?>"><input type="hidden" name="action" value="upload_payment_slip"><input type="hidden" name="invoice_id" value="<?php echo (int)$invoice['id']; ?>"><input class="form-control form-control-sm" type="file" name="payment_slip" accept="application/pdf,image/jpeg,image/png" required><button class="btn btn-sm btn-primary">Upload Slip</button></form><?php endif;?></div></td></tr><?php endforeach; ?></tbody></table></div></div>
 <?php endif; ?>
 
 <div class="row g-3 mb-3">

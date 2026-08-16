@@ -67,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_invoice_settings
                 $value = trim((string)($_POST[$key] ?? $default));
                 if ($key === 'invoice_currency') $value = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $value), 0, 3));
                 if ($key === 'invoice_participation_fee' && (!is_numeric($value) || (float)$value < 0)) throw new RuntimeException('Participation fee must be zero or greater.');
+                if ($key === 'invoice_deposit_percent' && (!is_numeric($value) || (float)$value < 0 || (float)$value > 100)) throw new RuntimeException('Deposit percentage must be between 0 and 100.');
                 setAppSetting($pdo, $key, $value);
             }
             if (isset($_FILES['invoice_logo']) && ($_FILES['invoice_logo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
@@ -125,10 +126,10 @@ require_once 'includes/header.php';
             <div class="row g-3">
                 <?php foreach ([
                     'invoice_org_name'=>'Association Name','invoice_org_name_en'=>'English Name','invoice_address'=>'Address','invoice_phone'=>'Phone','invoice_fax'=>'Fax','invoice_email'=>'Email','invoice_website'=>'Website',
-                    'invoice_prefix'=>'Invoice Prefix','invoice_terms'=>'Payment Terms','invoice_currency'=>'Currency','invoice_participation_fee'=>'Participation Fee',
+                    'invoice_prefix'=>'Invoice Prefix','invoice_terms'=>'Payment Terms','invoice_currency'=>'Currency','invoice_participation_fee'=>'Participation Fee','invoice_deposit_percent'=>'Deposit Percentage',
                     'invoice_bank_account'=>'Bank Account','invoice_bank_name'=>'Bank Name','invoice_account_no'=>'Account Number','invoice_branch_name'=>'Branch Name','invoice_swift_code'=>'SWIFT Code','invoice_branch_code'=>'Branch Code','invoice_payment_email'=>'Payment Slip Email'
                 ] as $key=>$label): ?>
-                <div class="col-md-6"><label class="form-label"><?php echo htmlspecialchars($label); ?></label><input class="form-control" name="<?php echo $key; ?>" value="<?php echo htmlspecialchars($invoiceSettings[$key]); ?>" <?php echo $key==='invoice_participation_fee'?'type="number" min="0" step="0.01"':'type="text"'; ?> required></div>
+                <div class="col-md-6"><label class="form-label"><?php echo htmlspecialchars($label); ?></label><input class="form-control" name="<?php echo $key; ?>" value="<?php echo htmlspecialchars($invoiceSettings[$key]); ?>" <?php echo in_array($key,['invoice_participation_fee','invoice_deposit_percent'],true)?'type="number" min="0" step="0.01"':'type="text"'; ?> required></div>
                 <?php endforeach; ?>
                 <div class="col-md-6"><label class="form-label">Association Logo</label><input class="form-control" type="file" name="invoice_logo" accept="image/jpeg,image/png"><div class="form-text">JPEG or PNG, maximum 2 MB. The image is converted to a PDF-compatible JPEG.</div></div>
             </div>
