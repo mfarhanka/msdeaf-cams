@@ -72,9 +72,9 @@ function invoiceSettingDefaults(): array
         'invoice_email' => 'info@msdeaf.org.my', 'invoice_website' => 'www.msdeaf.org.my',
         'invoice_prefix' => 'IV-APDMSC26', 'invoice_terms' => 'Net 30 days',
         'invoice_currency' => 'USD', 'invoice_participation_fee' => '50.00', 'invoice_deposit_percent' => '70',
-        'invoice_bank_account' => 'CIMB Bank Berhad',
+        'invoice_bank_account' => 'CIMB BANK BERHAD 197201001799 (13491-P)',
         'invoice_bank_name' => 'PERSATUAN SUKAN ORANG PEKAK MALAYSIA',
-        'invoice_account_no' => '8000852319', 'invoice_branch_name' => 'WISMA KOPONAS, KUALA LUMPUR',
+        'invoice_account_no' => '8000852319', 'invoice_branch_name' => '70-72-74, Wisma Koponas, Jalan Tun Sambanthan, Brickfields, 50470 Kuala Lumpur, Malaysia',
         'invoice_swift_code' => 'CIBBMYKL', 'invoice_branch_code' => '1426',
         'invoice_payment_email' => 'jasmine@msdeaf.org.my', 'invoice_logo_path' => 'association-logo.jpg',
     ];
@@ -87,6 +87,8 @@ function getInvoiceSettings(PDO $pdo): array
         $settings[$key] = getAppSetting($pdo, $key, $default);
         if ($key === 'invoice_logo_path' && trim((string)$settings[$key]) === '') $settings[$key] = $default;
     }
+    if(strcasecmp(trim((string)$settings['invoice_bank_account']),'CIMB Bank Berhad')===0){$settings['invoice_bank_account']=invoiceSettingDefaults()['invoice_bank_account'];setAppSetting($pdo,'invoice_bank_account',$settings['invoice_bank_account']);}
+    if(strcasecmp(trim((string)$settings['invoice_branch_name']),'WISMA KOPONAS, KUALA LUMPUR')===0){$settings['invoice_branch_name']=invoiceSettingDefaults()['invoice_branch_name'];setAppSetting($pdo,'invoice_branch_name',$settings['invoice_branch_name']);}
     return $settings;
 }
 
@@ -149,9 +151,16 @@ function pdfTextWidth(string $value, float $size, bool $bold=false): float
     $widths=$bold?$boldWidths:$regular;$units=0;foreach(str_split($value) as $char){$units+=$widths[$char]??556;}return $units*$size/1000;
 }
 
+function pdfWrapText(string $value,float $maxWidth,float $size,bool $bold=false):array
+{
+    $words=preg_split('/\s+/',trim($value))?:[];$lines=[];$current='';foreach($words as $word){$candidate=$current===''?$word:$current.' '.$word;if($current!==''&&pdfTextWidth($candidate,$size,$bold)>$maxWidth){$lines[]=$current;$current=$word;}else{$current=$candidate;}}if($current!=='')$lines[]=$current;return $lines?:[''];
+}
+
 function generateInvoicePdf(array $s, string $number, string $issuedAt, ?array $payment=null): string
 {
     $s['settings']=array_merge(invoiceSettingDefaults(),$s['settings']??[]);if(trim((string)$s['settings']['invoice_logo_path'])==='')$s['settings']['invoice_logo_path']=invoiceSettingDefaults()['invoice_logo_path'];
+    if(strcasecmp(trim((string)$s['settings']['invoice_bank_account']),'CIMB Bank Berhad')===0)$s['settings']['invoice_bank_account']=invoiceSettingDefaults()['invoice_bank_account'];
+    if(strcasecmp(trim((string)$s['settings']['invoice_branch_name']),'WISMA KOPONAS, KUALA LUMPUR')===0)$s['settings']['invoice_branch_name']=invoiceSettingDefaults()['invoice_branch_name'];
     $pages=[]; $content=''; $y=805; $logoData=null; $logoWidth=0; $logoHeight=0;
     $logoPath=(string)($s['settings']['invoice_logo_path']??'');
     if($logoPath!==''){$absolute=dirname(__DIR__).DIRECTORY_SEPARATOR.str_replace(['/', '\\'],DIRECTORY_SEPARATOR,$logoPath);if(is_file($absolute)){[$logoWidth,$logoHeight,$type]=getimagesize($absolute);if($type===IMAGETYPE_JPEG)$logoData=file_get_contents($absolute);}}
@@ -183,7 +192,7 @@ function generateInvoicePdf(array $s, string $number, string $issuedAt, ?array $
     $lineRight('BALANCE PAYMENT:',$summaryLabelRight,10,true);$lineRight('USD $ '.number_format($balanceAmount,2),$summaryValueRight,10,true);$y-=14;
     if($payment!==null){$received=(float)($payment['amount']??0);$totalPaid=(float)($payment['cumulative_paid']??$received);$remaining=max(0,(float)$s['total']-$totalPaid);$lineRight('PAYMENT RECEIVED:',$summaryLabelRight,9,true);$lineRight('USD $ '.number_format($received,2),$summaryValueRight,9,true);$y-=13;$lineRight('TOTAL PAID:',$summaryLabelRight,9,true);$lineRight('USD $ '.number_format($totalPaid,2),$summaryValueRight,9,true);$y-=13;$lineRight('BALANCE DUE:',$summaryLabelRight,9,true);$lineRight('USD $ '.number_format($remaining,2),$summaryValueRight,9,true);$y-=13;$lineRight('STATUS:',$summaryLabelRight,9,true);$lineRight($remaining<=0.005?'FULLY PAID':'DEPOSIT PAID',$summaryValueRight,9,true);$y-=13;$lineRight('Accepted: '.date('d.m.Y',strtotime($payment['reviewed_at'])),$summaryValueRight,8);$y-=12;$stampX=425;$stampY=$y-25;$content.="q 1 0 0 RG 2 w $stampX $stampY 62 23 re S Q\n1 0 0 rg BT /F2 13 Tf ".($stampX+15)." ".($stampY+6)." Td (PAID) Tj ET 0 0 0 rg\n";$y=$stampY-10;}
     $summaryEnd=$y;$y=$sectionTop-14;
-    foreach(['Bank Account'=>'invoice_bank_account','Bank Name'=>'invoice_bank_name','Account No'=>'invoice_account_no','Branch Name'=>'invoice_branch_name','Swift Code'=>'invoice_swift_code','Branch Code'=>'invoice_branch_code'] as $label=>$key){$line($label.': '.$s['settings'][$key],35,8,$label==='Bank Name');$y-=12;}
+    foreach(['Bank Account'=>'invoice_bank_account','Bank Name'=>'invoice_bank_name','Account No'=>'invoice_account_no','Branch Name'=>'invoice_branch_name','Swift Code'=>'invoice_swift_code','Branch Code'=>'invoice_branch_code'] as $label=>$key){$isBold=$label==='Bank Name';foreach(pdfWrapText($label.': '.$s['settings'][$key],285,8,$isBold) as $bankLine){$line($bankLine,35,8,$isBold);$y-=12;}}
     $y-=8; $line('Please send the transaction slip to: '.$s['settings']['invoice_payment_email'],35,8,true);$y-=12;$bankEnd=$y;$y=min($summaryEnd,$bankEnd);
     if($content!=='')$pages[]=$content;
     $pageCount=count($pages);foreach($pages as $pageIndex=>&$pageContent){$pageContent.="BT /F1 8 Tf 510 28 Td (Page ".($pageIndex+1)." of $pageCount) Tj ET\n";}unset($pageContent);
