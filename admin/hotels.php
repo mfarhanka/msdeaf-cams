@@ -557,9 +557,14 @@ require_once 'includes/header.php';
             <h5 class="mb-0"><i class="fas fa-users me-2"></i>Guest List — <?php echo htmlspecialchars($selectedHotelName); ?></h5>
             <small><?php echo count($selectedHotelGuests); ?> assigned guest(s)</small>
         </div>
-        <button type="button" class="btn btn-light btn-sm text-info" onclick="window.print()">
-            <i class="fas fa-print me-1"></i>Print Record
-        </button>
+        <div class="d-flex gap-2">
+            <a class="btn btn-light btn-sm text-danger" href="hotel_guest_export.php?hotel_id=<?php echo (int) $selectedHotelId; ?>">
+                <i class="fas fa-file-pdf me-1"></i>Export PDF
+            </a>
+            <button type="button" class="btn btn-light btn-sm text-info" onclick="window.print()">
+                <i class="fas fa-print me-1"></i>Print Record
+            </button>
+        </div>
     </div>
     <div class="card-body">
         <?php if ($selectedHotelGuests !== []): ?>
