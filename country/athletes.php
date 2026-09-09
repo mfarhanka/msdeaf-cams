@@ -1,6 +1,15 @@
 <?php
 require_once 'includes/auth.php';
 
+function formatRoomDisplayNumber(int $bookingId, string $roomNumber): string
+{
+    if (preg_match('/(\d+)$/', trim($roomNumber), $matches) === 1) {
+        return sprintf('R%d-%02d', $bookingId, (int) $matches[1]);
+    }
+
+    return 'R' . $bookingId . '-' . strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', $roomNumber));
+}
+
 $countryId = $_SESSION['id'];
 $tshirtColumnExistsStmt = $pdo->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'athletes' AND COLUMN_NAME = 'tshirt_size'");
 $tshirtColumnExistsStmt->execute();
@@ -52,8 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // Fetch athletes for this country
 $athletesStmt = $pdo->prepare("
-    SELECT a.*, 
-        CASE WHEN ra.room_number IS NOT NULL THEN CONCAT('Room ', ra.room_number) ELSE 'Unassigned' END AS room_assignment
+    SELECT a.*, ra.booking_id AS room_booking_id, ra.room_number
     FROM athletes a 
     LEFT JOIN room_assignments ra ON a.id = ra.athlete_id 
     WHERE a.country_id = ? 
@@ -61,6 +69,12 @@ $athletesStmt = $pdo->prepare("
 ");
 $athletesStmt->execute([$countryId]);
 $athletes = $athletesStmt->fetchAll(PDO::FETCH_ASSOC);
+foreach ($athletes as &$athlete) {
+    $athlete['room_assignment'] = !empty($athlete['room_number'])
+        ? 'Room ' . formatRoomDisplayNumber((int) $athlete['room_booking_id'], (string) $athlete['room_number'])
+        : 'Unassigned';
+}
+unset($athlete);
 
 // Calculate gender counts
 $maleCount = 0;

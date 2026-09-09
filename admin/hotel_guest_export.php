@@ -16,9 +16,11 @@ if (!$hotel) {
 }
 
 $guestStmt = $pdo->prepare("SELECT
+    b.id AS booking_id,
     u.country_name,
     a.first_name,
     a.last_name,
+    a.passport_number,
     a.participant_type,
     a.gender,
     c.title AS championship_title,
@@ -33,8 +35,14 @@ $guestStmt = $pdo->prepare("SELECT
     JOIN championships c ON c.id = b.championship_id
     JOIN room_types rt ON rt.id = b.room_type_id
     WHERE b.hotel_id = ? AND b.status <> 'Cancelled'
-    ORDER BY CASE WHEN ra.room_number IS NULL OR ra.room_number = '' THEN 1 ELSE 0 END,
-        ra.room_number ASC, u.country_name ASC, a.last_name ASC, a.first_name ASC");
+    ORDER BY CASE WHEN ra.room_number IS NULL OR TRIM(ra.room_number) = '' THEN 1 ELSE 0 END,
+        CAST(ra.room_number AS UNSIGNED) ASC,
+        ra.room_number ASC,
+        rt.name ASC,
+        b.id ASC,
+        u.country_name ASC,
+        a.last_name ASC,
+        a.first_name ASC");
 $guestStmt->execute([$hotelId]);
 $guests = $guestStmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -57,6 +65,15 @@ function reportPdfClip(string $value, int $length): string
     return substr($value, 0, max(0, $length - 3)) . '...';
 }
 
+function reportRoomDisplayNumber(int $bookingId, string $roomNumber): string
+{
+    if (preg_match('/(\d+)$/', trim($roomNumber), $matches) === 1) {
+        return sprintf('R%d-%02d', $bookingId, (int) $matches[1]);
+    }
+
+    return 'R' . $bookingId . '-' . strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', $roomNumber));
+}
+
 function reportPdfCell(string $text, float $x, float $y, float $width, bool $bold = false): string
 {
     $font = $bold ? 'F2' : 'F1';
@@ -71,14 +88,15 @@ $top = 558;
 $bottom = 30;
 $rowHeight = 17;
 $columns = [
-    ['Room', 45],
-    ['Guest name', 115],
-    ['Country', 82],
-    ['Type', 55],
-    ['Gender', 43],
-    ['Championship', 120],
-    ['Stay dates', 100],
-    ['Room type', 80],
+    ['Room number', 80],
+    ['Guest name', 105],
+    ['Passport', 75],
+    ['Country', 70],
+    ['Type', 48],
+    ['Gender', 40],
+    ['Championship', 90],
+    ['Stay dates', 90],
+    ['Room type', 55],
 ];
 
 $pages = [];
@@ -107,6 +125,7 @@ $finishPage = static function () use (&$pages, &$content): void {
 };
 
 $startPage();
+$lastPrintedRoom = null;
 if ($guests === []) {
     $content .= reportPdfCell('No assigned guests for this hotel.', $left + 3, $y, 500);
 } else {
@@ -114,14 +133,24 @@ if ($guests === []) {
         if ($y < $bottom + $rowHeight) {
             $finishPage();
             $startPage();
+            $lastPrintedRoom = null;
         }
         if ($index % 2 === 1) {
             $content .= "0.97 0.97 0.97 rg {$left} " . ($y - 4) . " 790 {$rowHeight} re f\n0 0 0 rg\n";
         }
         $stayDates = date('d M Y', strtotime($guest['booking_start_date'])) . ' - ' . date('d M Y', strtotime($guest['booking_end_date']));
+        $roomNumber = trim((string) ($guest['room_number'] ?? ''));
+        $roomKey = (int) $guest['booking_id'] . '|' . strtolower($roomNumber);
+        $roomLabel = $roomNumber === ''
+            ? 'Not set'
+            : ($roomKey === $lastPrintedRoom ? '' : reportRoomDisplayNumber((int) $guest['booking_id'], $roomNumber));
+        if ($roomNumber !== '') {
+            $lastPrintedRoom = $roomKey;
+        }
         $values = [
-            $guest['room_number'] ?: 'Not set',
+            $roomLabel,
             trim($guest['first_name'] . ' ' . $guest['last_name']),
+            trim((string) ($guest['passport_number'] ?? '')) ?: 'Not submitted',
             $guest['country_name'],
             ucfirst($guest['participant_type'] ?? 'athlete'),
             $guest['gender'],

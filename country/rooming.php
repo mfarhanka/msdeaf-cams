@@ -1,6 +1,15 @@
 <?php
 require_once 'includes/auth.php';
 
+function formatRoomDisplayNumber(int $bookingId, string $roomNumber): string
+{
+    if (preg_match('/(\d+)$/', trim($roomNumber), $matches) === 1) {
+        return sprintf('R%d-%02d', $bookingId, (int) $matches[1]);
+    }
+
+    return 'R' . $bookingId . '-' . strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', $roomNumber));
+}
+
 $countryId = $_SESSION['id'];
 $msg = '';
 
@@ -352,7 +361,7 @@ require_once 'includes/header.php';
                         <div class="border rounded p-3 h-100" id="room-card-<?php echo (int) $roomCard['booking_id']; ?>-<?php echo preg_replace('/\D+/', '', $roomCard['room_number']); ?>">
                             <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                                 <div>
-                                    <div class="fw-semibold"><?php echo htmlspecialchars($roomCard['hotel_name']); ?> - <?php echo htmlspecialchars($roomCard['room_number']); ?></div>
+                                    <div class="fw-semibold"><?php echo htmlspecialchars($roomCard['hotel_name']); ?> - Room <?php echo htmlspecialchars(formatRoomDisplayNumber((int) $roomCard['booking_id'], $roomCard['room_number'])); ?></div>
                                     <div class="small text-muted"><?php echo htmlspecialchars($roomCard['room_type_name']); ?> (<?php echo (int) $roomCard['capacity']; ?> pax/room)</div>
                                 </div>
                                 <span class="badge <?php echo $roomCard['is_full'] ? 'text-bg-danger' : 'text-bg-primary'; ?>"><?php echo count($roomCard['occupants']); ?> / <?php echo (int) $roomCard['capacity']; ?> Pax</span>

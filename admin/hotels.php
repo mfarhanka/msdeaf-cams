@@ -6,6 +6,15 @@ function formatHotelStarRatingLabel(int $starRating): string
     return $starRating > 0 ? str_repeat('⭐', $starRating) : 'Unrated';
 }
 
+function formatRoomDisplayNumber(int $bookingId, string $roomNumber): string
+{
+    if (preg_match('/(\d+)$/', trim($roomNumber), $matches) === 1) {
+        return sprintf('R%d-%02d', $bookingId, (int) $matches[1]);
+    }
+
+    return 'R' . $bookingId . '-' . strtoupper(preg_replace('/[^A-Za-z0-9]+/', '', $roomNumber));
+}
+
 function getSelectedChampionshipIds(PDO $pdo, array $submittedIds): array
 {
     $submittedIds = array_values(array_unique(array_filter(array_map('intval', $submittedIds), static function (int $id): bool {
@@ -258,9 +267,11 @@ if ($selectedHotelId > 0 && $selectedHotelName !== 'All Hotels') {
     $selectedHotelBookings = $hotelBookingsStmt->fetchAll(PDO::FETCH_ASSOC);
 
     $hotelGuestsStmt = $pdo->prepare("SELECT
+        b.id AS booking_id,
         u.country_name,
         a.first_name,
         a.last_name,
+        a.passport_number,
         a.participant_type,
         a.gender,
         c.title AS championship_title,
@@ -275,7 +286,15 @@ if ($selectedHotelId > 0 && $selectedHotelName !== 'All Hotels') {
         JOIN championships c ON c.id = b.championship_id
         JOIN room_types rt ON rt.id = b.room_type_id
         WHERE b.hotel_id = ? AND b.status <> 'Cancelled'
-        ORDER BY u.country_name ASC, a.last_name ASC, a.first_name ASC, b.booking_start_date ASC");
+        ORDER BY CASE WHEN ra.room_number IS NULL OR TRIM(ra.room_number) = '' THEN 1 ELSE 0 END,
+            CAST(ra.room_number AS UNSIGNED) ASC,
+            ra.room_number ASC,
+            rt.name ASC,
+            b.id ASC,
+            u.country_name ASC,
+            a.last_name ASC,
+            a.first_name ASC,
+            b.booking_start_date ASC");
     $hotelGuestsStmt->execute([$selectedHotelId]);
     $selectedHotelGuests = $hotelGuestsStmt->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -575,26 +594,58 @@ require_once 'includes/header.php';
                             <th>No.</th>
                             <th>Country</th>
                             <th>Guest Name</th>
+                            <th>Passport Number</th>
                             <th>Type</th>
                             <th>Gender</th>
                             <th>Championship</th>
                             <th>Stay Dates</th>
                             <th>Room Type</th>
-                            <th>Room</th>
+                            <th>Room Number</th>
                         </tr>
                     </thead>
                     <tbody>
+                        <?php
+                        $roomGuestCounts = [];
+                        foreach ($selectedHotelGuests as $roomGuest) {
+                            $roomNumber = trim((string) ($roomGuest['room_number'] ?? ''));
+                            if ($roomNumber !== '') {
+                                $roomKey = (int) $roomGuest['booking_id'] . '|' . strtolower($roomNumber);
+                                $roomGuestCounts[$roomKey] = ($roomGuestCounts[$roomKey] ?? 0) + 1;
+                            }
+                        }
+                        $renderedRooms = [];
+                        ?>
                         <?php foreach ($selectedHotelGuests as $guestIndex => $guest): ?>
+                            <?php
+                            $roomNumber = trim((string) ($guest['room_number'] ?? ''));
+                            $roomKey = (int) $guest['booking_id'] . '|' . strtolower($roomNumber);
+                            $showRoomCell = $roomNumber === '' || !isset($renderedRooms[$roomKey]);
+                            if ($roomNumber !== '' && $showRoomCell) {
+                                $renderedRooms[$roomKey] = true;
+                            }
+                            ?>
                             <tr>
                                 <td><?php echo $guestIndex + 1; ?></td>
                                 <td class="fw-semibold"><?php echo htmlspecialchars($guest['country_name']); ?></td>
                                 <td><?php echo htmlspecialchars(trim($guest['first_name'] . ' ' . $guest['last_name'])); ?></td>
+                                <td>
+                                    <?php if (trim((string) ($guest['passport_number'] ?? '')) !== ''): ?>
+                                        <span class="font-monospace"><?php echo htmlspecialchars($guest['passport_number']); ?></span>
+                                    <?php else: ?>
+                                        <span class="text-muted">Not submitted</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?php echo htmlspecialchars(ucfirst($guest['participant_type'] ?? 'athlete')); ?></td>
                                 <td><?php echo htmlspecialchars($guest['gender']); ?></td>
                                 <td><?php echo htmlspecialchars($guest['championship_title']); ?></td>
                                 <td><?php echo htmlspecialchars(date('M d, Y', strtotime($guest['booking_start_date'])) . ' – ' . date('M d, Y', strtotime($guest['booking_end_date']))); ?></td>
                                 <td><?php echo htmlspecialchars($guest['room_type_name']); ?></td>
-                                <td><?php echo htmlspecialchars($guest['room_number'] ?: 'Not set'); ?></td>
+                                <?php if ($showRoomCell): ?>
+                                    <td
+                                        <?php if ($roomNumber !== '' && ($roomGuestCounts[$roomKey] ?? 1) > 1): ?>rowspan="<?php echo (int) $roomGuestCounts[$roomKey]; ?>"<?php endif; ?>
+                                        class="align-middle fw-bold <?php echo $roomNumber !== '' ? 'table-info text-center' : 'text-muted'; ?>"
+                                    ><?php echo htmlspecialchars($roomNumber !== '' ? formatRoomDisplayNumber((int) $guest['booking_id'], $roomNumber) : 'Not set'); ?></td>
+                                <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
