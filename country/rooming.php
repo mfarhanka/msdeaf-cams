@@ -164,6 +164,8 @@ $reservations = $reservationsStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $roomingRowsStmt = $pdo->prepare("SELECT
     b.id AS booking_id,
+    b.booking_start_date,
+    b.booking_end_date,
     c.title AS championship_title,
     h.name AS hotel_name,
     rt.name AS room_type_name,
@@ -195,6 +197,8 @@ foreach ($roomingRows as $roomingRow) {
         $roomGroups[$groupKey] = [
             'booking_id' => (int) $roomingRow['booking_id'],
             'championship_title' => $roomingRow['championship_title'],
+            'booking_start_date' => $roomingRow['booking_start_date'],
+            'booking_end_date' => $roomingRow['booking_end_date'],
             'hotel_name' => $roomingRow['hotel_name'],
             'room_type_name' => $roomingRow['room_type_name'],
             'capacity' => (int) $roomingRow['capacity'],
@@ -250,6 +254,7 @@ foreach ($reservations as $reservation) {
 }
 
 $roomCards = [];
+$renderedRoomGroupKeys = [];
 foreach ($reservations as $reservation) {
     $bookingId = (int) $reservation['id'];
     $capacity = max(1, (int) $reservation['capacity']);
@@ -261,6 +266,7 @@ foreach ($reservations as $reservation) {
 
         if (isset($roomGroups[$roomKey])) {
             $occupants = $roomGroups[$roomKey]['occupants'];
+            $renderedRoomGroupKeys[$roomKey] = true;
         }
 
         $roomCards[] = [
@@ -276,6 +282,28 @@ foreach ($reservations as $reservation) {
             'is_full' => count($occupants) >= $capacity,
         ];
     }
+}
+
+// Older/imported assignments may use a physical room number (for example "204")
+// instead of the current "Room N" grouping label. Admin guest lists read those
+// assignments directly, so keep them visible to the owning country as well.
+foreach ($roomGroups as $roomKey => $roomGroup) {
+    if (isset($renderedRoomGroupKeys[$roomKey])) {
+        continue;
+    }
+
+    $roomCards[] = [
+        'booking_id' => (int) $roomGroup['booking_id'],
+        'room_number' => $roomGroup['room_number'],
+        'championship_title' => $roomGroup['championship_title'],
+        'booking_start_date' => $roomGroup['booking_start_date'],
+        'booking_end_date' => $roomGroup['booking_end_date'],
+        'hotel_name' => $roomGroup['hotel_name'],
+        'room_type_name' => $roomGroup['room_type_name'],
+        'capacity' => (int) $roomGroup['capacity'],
+        'occupants' => $roomGroup['occupants'],
+        'is_full' => count($roomGroup['occupants']) >= (int) $roomGroup['capacity'],
+    ];
 }
 
 $unassignedAthletes = [];
