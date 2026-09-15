@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS athletes (
     gender ENUM('M', 'F', 'Other') NOT NULL,
     participant_type ENUM('athlete', 'official') NOT NULL DEFAULT 'athlete',
     tshirt_size VARCHAR(10) NULL,
+    meal_preference ENUM('vegetarian', 'non_vegetarian') NULL,
+    allergy_details VARCHAR(500) NULL,
     sport_category VARCHAR(100) NOT NULL,
     passport_number VARCHAR(255) NOT NULL, -- In real app, this should be encrypted
     FOREIGN KEY (country_id) REFERENCES users(id) ON DELETE CASCADE
@@ -165,6 +167,7 @@ VALUES
     ('delegate_menu_athletes_visible', '1'),
     ('delegate_menu_passport_visible', '1'),
     ('delegate_menu_flights_visible', '1'),
+    ('delegate_menu_meals_visible', '1'),
     ('delegate_menu_tshirt_visible', '1'),
     ('delegate_menu_book_visible', '1'),
     ('delegate_menu_rooming_visible', '1'),

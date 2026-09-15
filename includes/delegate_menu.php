@@ -26,6 +26,12 @@ function getDelegateMenuItems(): array
             'icon' => 'bi-airplane-fill',
             'href' => 'flights.php',
             'setting_key' => 'delegate_menu_flights_visible',
+        ],
+        'meals' => [
+            'label' => 'Meal Preferences',
+            'icon' => 'bi-egg-fried',
+            'href' => 'meals.php',
+            'setting_key' => 'delegate_menu_meals_visible',
             'badge' => 'NEW',
         ],
         'tshirt' => [
