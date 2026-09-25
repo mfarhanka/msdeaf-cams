@@ -43,6 +43,9 @@ if (!empty($_SESSION['show_login_announcement']) && isset($pdo)) {
             background-color: var(--primary-blue);
             box-shadow: 0 2px 4px rgba(0,0,0,0.08);
             padding: 0.5rem 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
         }
 
         .navbar-brand, .nav-link {
@@ -51,14 +54,20 @@ if (!empty($_SESSION['show_login_announcement']) && isset($pdo)) {
 
         .sidebar {
             background-color: white;
-            position: sticky;
-            top: 0;
-            align-self: flex-start;
-            height: 100vh;
-            overflow-y: auto;
             border-right: 1px solid #dee2e6;
             max-width: 220px;
             padding-top: 0.75rem;
+        }
+
+        @media (min-width: 768px) {
+            .sidebar {
+                position: fixed;
+                top: 56px;
+                bottom: 0;
+                left: 0;
+                width: 16.66666667%;
+                overflow-y: auto;
+            }
         }
 
         .card {
