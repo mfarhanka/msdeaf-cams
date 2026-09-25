@@ -168,6 +168,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <div class="nav flex-column nav-pills">
             <a class="nav-link w-100 text-start <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'admins.php' ? 'active' : ''; ?>" href="admins.php"><i class="bi bi-shield-lock me-2"></i>Admins</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'hotel_accounts.php' ? 'active' : ''; ?>" href="hotel_accounts.php"><i class="bi bi-key me-2"></i>Hotel Accounts</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'championships.php' ? 'active' : ''; ?>" href="championships.php"><i class="bi bi-trophy me-2"></i>Championships</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'championship_participants.php' ? 'active' : ''; ?>" href="championship_participants.php"><i class="bi bi-person-lines-fill me-2"></i>Championship Participants<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'hotels.php' ? 'active' : ''; ?>" href="hotels.php"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</a>
@@ -198,6 +199,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <h6 class="px-3 mb-2 text-muted small text-uppercase fw-bold">Management</h6>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'admins.php' ? 'active' : ''; ?>" href="admins.php"><i class="bi bi-shield-lock me-2"></i>Admins</a>
+                    <a class="nav-link w-100 text-start <?php echo $current_page == 'hotel_accounts.php' ? 'active' : ''; ?>" href="hotel_accounts.php"><i class="bi bi-key me-2"></i>Hotel Accounts</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'championships.php' ? 'active' : ''; ?>" href="championships.php"><i class="bi bi-trophy me-2"></i>Championships</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'championship_participants.php' ? 'active' : ''; ?>" href="championship_participants.php"><i class="bi bi-person-lines-fill me-2"></i>Championship Participants<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'hotels.php' ? 'active' : ''; ?>" href="hotels.php"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</a>

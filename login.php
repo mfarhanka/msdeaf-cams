@@ -73,6 +73,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         header("location: admin/dashboard.php");
                     } elseif ($row['role'] === 'volunteer') {
                         header('location: volunteer/' . ((int)($row['must_change_password'] ?? 0) === 1 ? 'change-password.php' : 'dashboard.php'));
+                    } elseif ($row['role'] === 'hotel') {
+                        header('location: hotel/rooms.php');
                     } else {
                         header("location: country/dashboard.php");
                     }

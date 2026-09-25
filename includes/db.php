@@ -207,6 +207,28 @@ function ensureHotelStarRatingColumn(PDO $pdo): void
     }
 }
 
+function ensureHotelPortalSchema(PDO $pdo): void
+{
+    static $hotelPortalChecked = false;
+
+    if ($hotelPortalChecked) {
+        return;
+    }
+
+    $hotelPortalChecked = true;
+    $roleColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
+    if ($roleColumn && strpos((string) $roleColumn['Type'], "'hotel'") === false) {
+        $pdo->exec("ALTER TABLE users MODIFY role ENUM('admin', 'country_manager', 'volunteer', 'hotel') NOT NULL");
+    }
+
+    $columns = $pdo->query("SHOW COLUMNS FROM users")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('hotel_id', $columns, true)) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN hotel_id INT NULL AFTER country_name");
+        $pdo->exec("ALTER TABLE users ADD INDEX idx_users_hotel_id (hotel_id)");
+        $pdo->exec("ALTER TABLE users ADD CONSTRAINT fk_users_hotel FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE SET NULL");
+    }
+}
+
 function ensureBookingScheduleColumns(PDO $pdo): void
 {
     static $bookingScheduleChecked = false;
@@ -278,6 +300,7 @@ try {
     $pdo = new PDO(buildDatabaseDsn($dbConfig), $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     ensureHotelStarRatingColumn($pdo);
+    ensureHotelPortalSchema($pdo);
     ensureBookingScheduleColumns($pdo);
     if (shouldAutoManageDatabaseSchema()) {
         ensureUserStatusColumn($pdo);
