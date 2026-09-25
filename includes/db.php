@@ -216,16 +216,33 @@ function ensureHotelPortalSchema(PDO $pdo): void
     }
 
     $hotelPortalChecked = true;
-    $roleColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
-    if ($roleColumn && strpos((string) $roleColumn['Type'], "'hotel'") === false) {
-        $pdo->exec("ALTER TABLE users MODIFY role ENUM('admin', 'country_manager', 'volunteer', 'hotel') NOT NULL");
+    try {
+        $roleColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
+        if ($roleColumn && strpos((string) $roleColumn['Type'], "'hotel'") === false) {
+            $pdo->exec("ALTER TABLE users MODIFY role ENUM('admin', 'country_manager', 'volunteer', 'hotel') NOT NULL");
+        }
+    } catch (PDOException $exception) {
+        error_log('Hotel portal role migration failed: ' . $exception->getMessage());
     }
 
-    $columns = $pdo->query("SHOW COLUMNS FROM users")->fetchAll(PDO::FETCH_COLUMN);
-    if (!in_array('hotel_id', $columns, true)) {
-        $pdo->exec("ALTER TABLE users ADD COLUMN hotel_id INT NULL AFTER country_name");
-        $pdo->exec("ALTER TABLE users ADD INDEX idx_users_hotel_id (hotel_id)");
-        $pdo->exec("ALTER TABLE users ADD CONSTRAINT fk_users_hotel FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE SET NULL");
+    try {
+        $columns = $pdo->query("SHOW COLUMNS FROM users")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('hotel_id', $columns, true)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN hotel_id INT NULL AFTER country_name");
+        }
+    } catch (PDOException $exception) {
+        error_log('Hotel portal column migration failed: ' . $exception->getMessage());
+    }
+
+    // Indexing is useful but not required for the portal. Keep it best-effort so
+    // restrictive shared-hosting schemas cannot turn every page into a 500 error.
+    try {
+        $indexStmt = $pdo->query("SHOW INDEX FROM users WHERE Key_name = 'idx_users_hotel_id'");
+        if (!$indexStmt->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec("ALTER TABLE users ADD INDEX idx_users_hotel_id (hotel_id)");
+        }
+    } catch (PDOException $exception) {
+        error_log('Hotel portal index migration skipped: ' . $exception->getMessage());
     }
 }
 
