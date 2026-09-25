@@ -15,7 +15,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (!empty($user) && !empty($pass) && isset($pdo)) {
         // Find user in database based on roles
         $normalizedUser = normalizeVolunteerIdentity($user);
-        $stmt = $pdo->prepare("SELECT id, username, password, role, status, must_change_password FROM users WHERE username = ? OR (role = 'volunteer' AND username = ?) ORDER BY (username = ?) DESC LIMIT 1");
+        $mustChangeColumnStmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'must_change_password'");
+        $mustChangePasswordSelect = $mustChangeColumnStmt->fetch(PDO::FETCH_ASSOC)
+            ? 'must_change_password'
+            : '0 AS must_change_password';
+        $stmt = $pdo->prepare("SELECT id, username, password, role, status, {$mustChangePasswordSelect} FROM users WHERE username = ? OR (role = 'volunteer' AND username = ?) ORDER BY (username = ?) DESC LIMIT 1");
         $stmt->execute([$user, $normalizedUser, $user]);
 
         if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {

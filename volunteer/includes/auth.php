@@ -5,7 +5,11 @@ if (empty($_SESSION['loggedin']) || ($_SESSION['role'] ?? '') !== 'volunteer') {
 }
 require_once dirname(__DIR__, 2) . '/includes/db.php';
 require_once dirname(__DIR__, 2) . '/includes/activity.php';
-$stmt = $pdo->prepare("SELECT id, username, role, status, must_change_password FROM users WHERE id=? LIMIT 1");
+$mustChangeColumnStmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'must_change_password'");
+$mustChangePasswordSelect = $mustChangeColumnStmt->fetch(PDO::FETCH_ASSOC)
+    ? 'must_change_password'
+    : '0 AS must_change_password';
+$stmt = $pdo->prepare("SELECT id, username, role, status, {$mustChangePasswordSelect} FROM users WHERE id=? LIMIT 1");
 $stmt->execute([$_SESSION['id'] ?? 0]);
 $currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$currentUser || $currentUser['role'] !== 'volunteer' || $currentUser['status'] !== 'active') {

@@ -67,7 +67,11 @@ function recordActivity(
     }
 
     if ($telegramMessage !== null && $telegramMessage !== '') {
-        sendTelegramNotification($telegramMessage);
+        try {
+            sendTelegramNotification($telegramMessage);
+        } catch (Throwable $exception) {
+            error_log('Telegram activity notification failed: ' . $exception->getMessage());
+        }
     }
 }
 

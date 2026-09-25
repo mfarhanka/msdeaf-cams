@@ -48,21 +48,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
     }
 }
 
-$rowsStmt = $pdo->prepare("SELECT b.id AS booking_id, c.title AS championship_title, c.start_date, c.end_date,
-        u.country_name, u.username AS delegation_username, rt.name AS room_type_name, rt.capacity,
-        ra.room_number, COUNT(*) AS guest_count,
-        GROUP_CONCAT(CONCAT(a.first_name, ' ', a.last_name) ORDER BY a.last_name, a.first_name SEPARATOR ', ') AS guest_names
-    FROM room_assignments ra
-    JOIN bookings b ON b.id = ra.booking_id
-    JOIN athletes a ON a.id = ra.athlete_id
-    JOIN users u ON u.id = b.country_id
-    JOIN championships c ON c.id = b.championship_id
-    JOIN room_types rt ON rt.id = b.room_type_id
-    WHERE b.hotel_id = ? AND b.status <> 'Cancelled' AND ra.room_number IS NOT NULL AND TRIM(ra.room_number) <> ''
-    GROUP BY b.id, c.title, c.start_date, c.end_date, u.country_name, u.username, rt.name, rt.capacity, ra.room_number
-    ORDER BY c.start_date, COALESCE(u.country_name, u.username), b.id, ra.room_number");
-$rowsStmt->execute([$hotelId]);
-$roomGroups = $rowsStmt->fetchAll(PDO::FETCH_ASSOC);
+$roomGroups = [];
+$roomLoadError = '';
+try {
+    $rowsStmt = $pdo->prepare("SELECT b.id AS booking_id, c.title AS championship_title,
+            u.country_name, u.username AS delegation_username, rt.name AS room_type_name, rt.capacity,
+            ra.room_number, a.first_name, a.last_name
+        FROM room_assignments ra
+        JOIN bookings b ON b.id = ra.booking_id
+        JOIN athletes a ON a.id = ra.athlete_id
+        JOIN users u ON u.id = b.country_id
+        JOIN championships c ON c.id = b.championship_id
+        JOIN room_types rt ON rt.id = b.room_type_id
+        WHERE b.hotel_id = ? AND b.status <> 'Cancelled'
+            AND ra.room_number IS NOT NULL AND ra.room_number <> ''
+        ORDER BY c.start_date, u.country_name, u.username, b.id, ra.room_number, a.last_name, a.first_name");
+    $rowsStmt->execute([$hotelId]);
+
+    foreach ($rowsStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $groupKey = (string) $row['booking_id'] . '|' . (string) $row['room_number'];
+        if (!isset($roomGroups[$groupKey])) {
+            $roomGroups[$groupKey] = [
+                'booking_id' => (int) $row['booking_id'],
+                'championship_title' => $row['championship_title'],
+                'country_name' => $row['country_name'],
+                'delegation_username' => $row['delegation_username'],
+                'room_type_name' => $row['room_type_name'],
+                'capacity' => (int) $row['capacity'],
+                'room_number' => $row['room_number'],
+                'guest_count' => 0,
+                'guest_names' => [],
+            ];
+        }
+        $roomGroups[$groupKey]['guest_count']++;
+        $roomGroups[$groupKey]['guest_names'][] = trim((string) $row['first_name'] . ' ' . (string) $row['last_name']);
+    }
+
+    foreach ($roomGroups as &$roomGroup) {
+        $roomGroup['guest_names'] = implode(', ', $roomGroup['guest_names']);
+    }
+    unset($roomGroup);
+    $roomGroups = array_values($roomGroups);
+} catch (PDOException $exception) {
+    error_log('Hotel room list failed: ' . $exception->getMessage());
+    $roomLoadError = 'Room assignments cannot be loaded right now. Please contact the administrator.';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -83,7 +113,9 @@ $roomGroups = $rowsStmt->fetchAll(PDO::FETCH_ASSOC);
 <main class="container py-4">
     <div class="mb-4"><h1 class="h3 mb-1">Room Number Entry</h1><p class="text-muted mb-0">Enter only the hotel's physical room number for each prepared guest group.</p></div>
     <?php echo $msg; ?>
-    <?php if ($roomGroups === []): ?>
+    <?php if ($roomLoadError !== ''): ?>
+        <div class="alert alert-danger"><?php echo htmlspecialchars($roomLoadError); ?></div>
+    <?php elseif ($roomGroups === []): ?>
         <div class="alert alert-info">No guest room groups are ready for this hotel yet.</div>
     <?php else: ?>
         <div class="row g-3">

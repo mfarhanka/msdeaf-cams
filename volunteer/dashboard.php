@@ -3,7 +3,7 @@ require_once 'includes/auth.php';
 require_once '../includes/volunteers.php';
 $stmt=$pdo->prepare('SELECT * FROM volunteer_applications WHERE user_id=? LIMIT 1'); $stmt->execute([$currentUser['id']]); $application=$stmt->fetch(PDO::FETCH_ASSOC);
 if (!$application) { http_response_code(404); exit('Volunteer profile not found.'); }
-$language=($_GET['lang'] ?? $_SESSION['volunteer_language'] ?? 'ms')==='en'?'en':'ms'; $t=static fn($ms,$en)=>$language==='en'?$en:$ms; $pageTitle=$t('Papan Pemuka Sukarelawan','Volunteer Dashboard');
+$language=($_GET['lang'] ?? $_SESSION['volunteer_language'] ?? 'ms')==='en'?'en':'ms'; $t=static function($ms,$en) use ($language) { return $language==='en'?$en:$ms; }; $pageTitle=$t('Papan Pemuka Sukarelawan','Volunteer Dashboard');
 require 'includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center mb-4"><div><h1 class="h3 mb-1"><?php echo $t('Selamat datang','Welcome'); ?>, <?php echo htmlspecialchars($application['full_name']); ?></h1><p class="text-muted mb-0"><?php echo $t('Profil sukarelawan MSDeaf anda','Your MSDeaf volunteer profile'); ?></p></div><span class="badge bg-success fs-6"><?php echo $t('Diluluskan','Approved'); ?></span></div>

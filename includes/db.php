@@ -317,7 +317,6 @@ try {
     $pdo = new PDO(buildDatabaseDsn($dbConfig), $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     ensureHotelStarRatingColumn($pdo);
-    ensureHotelPortalSchema($pdo);
     ensureBookingScheduleColumns($pdo);
     if (shouldAutoManageDatabaseSchema()) {
         ensureUserStatusColumn($pdo);
