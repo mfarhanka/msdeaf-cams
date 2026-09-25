@@ -3,3 +3,9 @@
 !.env.example
 
 .venv/
+vendor/
+composer.phar
+composer-setup.php
+.sessions/
+volunteer-server.log
+volunteer-server.err

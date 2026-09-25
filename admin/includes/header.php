@@ -174,6 +174,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <a class="nav-link w-100 text-start <?php echo $current_page == 'invoices.php' ? 'active' : ''; ?>" href="invoices.php"><i class="bi bi-receipt me-2"></i>Invoices</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'delegations.php' ? 'active' : ''; ?>" href="delegations.php"><i class="bi bi-globe me-2"></i>Delegations</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php"><i class="bi bi-megaphone me-2"></i>Announcements</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'volunteers.php' ? 'active' : ''; ?>" href="volunteers.php"><i class="bi bi-people me-2"></i>Volunteers<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'activity_logs.php' ? 'active' : ''; ?>" href="activity_logs.php"><i class="bi bi-journal-text me-2"></i>Activity Logs</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'finance.php' ? 'active' : ''; ?>" href="finance.php"><i class="bi bi-receipt-cutoff me-2"></i>Financial Report</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'tshirts.php' ? 'active' : ''; ?>" href="tshirts.php"><i class="bi bi-tags me-2"></i>T-Shirt Sizes</a>
@@ -203,6 +204,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'invoices.php' ? 'active' : ''; ?>" href="invoices.php"><i class="bi bi-receipt me-2"></i>Invoices</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'delegations.php' ? 'active' : ''; ?>" href="delegations.php"><i class="bi bi-globe me-2"></i>Delegations</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php"><i class="bi bi-megaphone me-2"></i>Announcements</a>
+                    <a class="nav-link w-100 text-start <?php echo $current_page == 'volunteers.php' ? 'active' : ''; ?>" href="volunteers.php"><i class="bi bi-people me-2"></i>Volunteers<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'activity_logs.php' ? 'active' : ''; ?>" href="activity_logs.php"><i class="bi bi-journal-text me-2"></i>Activity Logs</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'finance.php' ? 'active' : ''; ?>" href="finance.php"><i class="bi bi-receipt-cutoff me-2"></i>Financial Report</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'tshirts.php' ? 'active' : ''; ?>" href="tshirts.php"><i class="bi bi-tags me-2"></i>T-Shirt Sizes</a>

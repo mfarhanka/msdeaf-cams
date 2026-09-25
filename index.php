@@ -11,6 +11,11 @@ if (!empty($_SESSION['loggedin']) && !empty($_SESSION['role'])) {
         header('location: country/dashboard.php');
         exit;
     }
+
+    if ($_SESSION['role'] === 'volunteer') {
+        header('location: volunteer/dashboard.php');
+        exit;
+    }
 }
 
 header('location: login.php');

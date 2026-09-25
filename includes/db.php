@@ -284,6 +284,8 @@ try {
         ensureActivityLogTable($pdo);
         ensureAppSettingsTable($pdo);
         ensureAnnouncementsTable($pdo);
+        require_once __DIR__ . '/volunteers.php';
+        ensureVolunteerSchema($pdo);
         require_once __DIR__ . '/invoices.php';
         ensureInvoiceSchema($pdo);
     }

@@ -3,6 +3,7 @@ session_start();
 $suppressDbErrors = true;
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/activity.php';
+require_once __DIR__ . '/includes/volunteers.php';
 
 $error = '';
 
@@ -13,11 +14,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     if (!empty($user) && !empty($pass) && isset($pdo)) {
         // Find user in database based on roles
-        $stmt = $pdo->prepare("SELECT id, username, password, role, status FROM users WHERE username = :username");
-        $stmt->bindParam(':username', $user);
-        $stmt->execute();
+        $normalizedUser = normalizeVolunteerIdentity($user);
+        $stmt = $pdo->prepare("SELECT id, username, password, role, status, must_change_password FROM users WHERE username = ? OR (role = 'volunteer' AND username = ?) ORDER BY (username = ?) DESC LIMIT 1");
+        $stmt->execute([$user, $normalizedUser, $user]);
 
         if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $auditUsername = $row['role'] === 'volunteer' ? maskVolunteerIdentity($row['username']) : $row['username'];
             // Validate password using password_verify()
             if (password_verify($pass, $row['password'])) {
                 if (($row['status'] ?? 'active') !== 'active') {
@@ -27,10 +29,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         'user',
                         (int) $row['id'],
                         'Suspended user attempted to sign in.',
-                        ['username_input' => $user],
+                        ['username_input' => $auditUsername],
                         (int) $row['id'],
                         (string) $row['role'],
-                        (string) $row['username']
+                        (string) $auditUsername
                     );
                     $error = "Your account has been suspended. Please contact the system administrator.";
                 } else {
@@ -48,7 +50,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $telegramMessage = formatTelegramActivityMessage(
                         'CAMS login',
                         [
-                            'User: ' . $row['username'],
+                            'User: ' . $auditUsername,
                             'Role: ' . $row['role'],
                             'Status: success',
                         ]
@@ -62,13 +64,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         [],
                         (int) $row['id'],
                         (string) $row['role'],
-                        (string) $row['username'],
+                        (string) $auditUsername,
                         $telegramMessage
                     );
 
                     // Redirect depending on role
                     if ($row['role'] === 'admin') {
                         header("location: admin/dashboard.php");
+                    } elseif ($row['role'] === 'volunteer') {
+                        header('location: volunteer/' . ((int)($row['must_change_password'] ?? 0) === 1 ? 'change-password.php' : 'dashboard.php'));
                     } else {
                         header("location: country/dashboard.php");
                     }
@@ -81,24 +85,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     'user',
                     (int) $row['id'],
                     'Password verification failed during sign-in.',
-                    ['username_input' => $user],
+                    ['username_input' => $auditUsername],
                     null,
                     null,
-                    $user
+                    $auditUsername
                 );
                 $error = "Invalid username or password.";
             }
         } else {
+            $unknownAuditUsername = preg_match('/\d{6}/', $user) ? '[redacted identifier]' : substr($user, 0, 100);
             recordActivity(
                 $pdo,
                 'login_failed',
                 'user',
                 null,
                 'Unknown username attempted to sign in.',
-                ['username_input' => $user],
+                ['username_input' => $unknownAuditUsername],
                 null,
                 null,
-                $user
+                $unknownAuditUsername
             );
             $error = "Invalid username or password.";
         }
@@ -251,6 +256,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="text-center mt-4">
                         <small class="text-muted">Need help logging in? <br>Contact the <b>System Administrator</b>.</small>
                     </div>
+                    <hr class="my-4">
+                    <div class="text-center"><p class="small text-muted mb-2">Want to support MSDeaf? / Mahu menyokong MSDeaf?</p><a class="btn btn-outline-primary w-100" href="volunteer.php"><i class="bi bi-people me-1"></i> Apply as Volunteer / Mohon Sukarelawan</a></div>
                 </div>
             </div>
         </div>
