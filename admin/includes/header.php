@@ -34,7 +34,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         .sidebar {
             background-color: white;
-            min-height: calc(100vh - 56px);
+            position: sticky;
+            top: 0;
+            align-self: flex-start;
+            height: 100vh;
+            overflow-y: auto;
             border-right: 1px solid #dee2e6;
             max-width: 220px;
             padding-top: 0.75rem;
