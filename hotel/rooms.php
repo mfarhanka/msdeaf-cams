@@ -53,7 +53,7 @@ $roomLoadError = '';
 try {
     $rowsStmt = $pdo->prepare("SELECT b.id AS booking_id, c.title AS championship_title,
             u.country_name, u.username AS delegation_username, rt.name AS room_type_name, rt.capacity,
-            ra.room_number, a.first_name, a.last_name
+            ra.room_number, a.first_name, a.last_name, a.gender
         FROM room_assignments ra
         JOIN bookings b ON b.id = ra.booking_id
         JOIN athletes a ON a.id = ra.athlete_id
@@ -81,7 +81,10 @@ try {
             ];
         }
         $roomGroups[$groupKey]['guest_count']++;
-        $roomGroups[$groupKey]['guest_names'][] = trim((string) $row['first_name'] . ' ' . (string) $row['last_name']);
+        $roomGroups[$groupKey]['guest_names'][] = [
+            'name' => trim((string) $row['first_name'] . ' ' . (string) $row['last_name']),
+            'gender' => (string) $row['gender'],
+        ];
     }
 
     $roomGroups = array_values($roomGroups);
@@ -98,6 +101,14 @@ foreach ($roomGroups as $roomGroup) {
     }
     $delegationGroups[$delegationName][] = $roomGroup;
 }
+$totalAssignedRooms = count($roomGroups);
+$updatedRoomCount = 0;
+foreach ($roomGroups as $roomGroup) {
+    if (preg_match('/^Room\s+\d+$/i', trim((string) $roomGroup['room_number'])) !== 1) {
+        $updatedRoomCount++;
+    }
+}
+$pendingRoomCount = max(0, $totalAssignedRooms - $updatedRoomCount);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -123,7 +134,12 @@ foreach ($roomGroups as $roomGroup) {
 <main class="container-fluid px-3 px-md-4 py-4">
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
         <div><h1 class="h3 mb-1">Assigned Guest Rooms</h1><p class="text-muted mb-0">Enter the hotel's physical room number for each assigned guest group.</p></div>
-        <?php if ($roomGroups !== []): ?><span class="badge text-bg-primary fs-6"><?php echo count($roomGroups); ?> booked room<?php echo count($roomGroups) === 1 ? '' : 's'; ?></span><?php endif; ?>
+        <?php if ($roomGroups !== []): ?>
+            <div class="d-flex flex-wrap gap-2">
+                <span class="badge text-bg-success fs-6"><i class="bi bi-check-circle me-1"></i><?php echo $updatedRoomCount; ?> of <?php echo $totalAssignedRooms; ?> room numbers updated</span>
+                <?php if ($pendingRoomCount > 0): ?><span class="badge text-bg-warning fs-6"><i class="bi bi-clock me-1"></i><?php echo $pendingRoomCount; ?> pending</span><?php endif; ?>
+            </div>
+        <?php endif; ?>
     </div>
     <?php echo $msg; ?>
     <?php if ($roomLoadError !== ''): ?>
@@ -154,13 +170,20 @@ foreach ($roomGroups as $roomGroup) {
                     <?php
                     $temporaryRoomLabel = preg_match('/^Room\s+\d+$/i', trim((string) $group['room_number'])) === 1;
                     $roomInputValue = $temporaryRoomLabel ? '' : (string) $group['room_number'];
-                    $guestNamesText = implode(', ', $group['guest_names']);
+                    $guestNamesText = implode(', ', array_map(static function (array $guest): string { return $guest['name'] . ' (' . $guest['gender'] . ')'; }, $group['guest_names']));
                     ?>
                     <tr>
                         <td class="text-muted"><?php echo $index + 1; ?></td>
                         <td><div class="fw-semibold"><?php echo htmlspecialchars($group['championship_title']); ?></div><div class="small text-muted">Booking #<?php echo (int) $group['booking_id']; ?></div></td>
                         <td><?php echo htmlspecialchars($group['room_type_name']); ?><div class="small text-muted"><?php echo (int) $group['guest_count']; ?> of <?php echo (int) $group['capacity']; ?> guests</div></td>
-                        <td class="guest-list"><?php foreach ($group['guest_names'] as $guestName): ?><div><?php echo htmlspecialchars($guestName); ?></div><?php endforeach; ?></td>
+                        <td class="guest-list">
+                            <?php foreach ($group['guest_names'] as $guest): ?>
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span><?php echo htmlspecialchars($guest['name']); ?></span>
+                                    <span class="badge rounded-pill <?php echo $guest['gender'] === 'F' ? 'text-bg-danger' : ($guest['gender'] === 'M' ? 'text-bg-primary' : 'text-bg-secondary'); ?>"><?php echo htmlspecialchars($guest['gender']); ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                        </td>
                         <td class="room-entry">
                             <form method="post" class="d-flex gap-2">
                                 <input type="hidden" name="action" value="update_room_number">
