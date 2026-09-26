@@ -53,10 +53,37 @@ if ($status !== '') { $where[] = 'v.status = ?'; $params[] = $status; }
 if ($search !== '') { $where[] = '(v.full_name LIKE ? OR v.email LIKE ? OR v.whatsapp LIKE ?)'; $params = array_merge($params, array_fill(0, 3, '%' . $search . '%')); }
 $sql = 'SELECT v.*, u.username AS reviewer_name FROM volunteer_applications v LEFT JOIN users u ON u.id=v.reviewed_by' . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY v.created_at DESC';
 $stmt = $pdo->prepare($sql); $stmt->execute($params); $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$availabilityByRange = [];
+$availabilityByDate = [];
+foreach ($applications as $application) {
+    if (empty($application['available_from'])) { continue; }
+    try {
+        $availableFrom = new DateTimeImmutable($application['available_from']);
+        $availableUntil = !empty($application['available_until']) ? new DateTimeImmutable($application['available_until']) : $availableFrom;
+    } catch (Throwable $exception) { continue; }
+    if ($availableUntil < $availableFrom) { $availableUntil = $availableFrom; }
+    $rangeKey = $availableFrom->format('Y-m-d') . '|' . $availableUntil->format('Y-m-d');
+    if (!isset($availabilityByRange[$rangeKey])) {
+        $availabilityByRange[$rangeKey] = ['from' => $availableFrom, 'until' => $availableUntil, 'total' => 0];
+    }
+    $availabilityByRange[$rangeKey]['total']++;
+    for ($date = $availableFrom; $date <= $availableUntil; $date = $date->modify('+1 day')) {
+        $dateKey = $date->format('Y-m-d');
+        $availabilityByDate[$dateKey] = ($availabilityByDate[$dateKey] ?? 0) + 1;
+    }
+}
+ksort($availabilityByRange);
+ksort($availabilityByDate);
 require_once 'includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center border-bottom mb-3 pb-2"><div><h1 class="h2 mb-1">Volunteer Applications</h1><p class="text-muted mb-0">Review general volunteer-pool applications and issue approved accounts.</p></div><span class="badge bg-primary fs-6"><?php echo count($applications); ?> shown</span></div>
 <form class="card card-body mb-3" method="get"><div class="row g-2"><div class="col-md-7"><input class="form-control" name="q" value="<?php echo htmlspecialchars($search); ?>" placeholder="Search name, email, or WhatsApp"></div><div class="col-md-3"><select class="form-select" name="status"><option value="">All statuses</option><?php foreach(['pending','approved','rejected'] as $value): ?><option value="<?php echo $value; ?>" <?php echo $status===$value?'selected':''; ?>><?php echo ucfirst($value); ?></option><?php endforeach; ?></select></div><div class="col-md-2 d-grid"><button class="btn btn-primary">Filter</button></div></div></form>
+<div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><strong>Volunteer Availability by Date Range</strong><span class="badge bg-primary"><?php echo count($availabilityByRange); ?> ranges</span></div><div class="card-body p-0"><div class="table-responsive"><table class="table table-striped align-middle mb-0"><thead><tr><th>Available From</th><th>Available Until</th><th class="text-end">Total Volunteers</th></tr></thead><tbody>
+<?php foreach ($availabilityByRange as $range): ?><tr><td><?php echo htmlspecialchars($range['from']->format('d M Y')); ?></td><td><?php echo htmlspecialchars($range['until']->format('d M Y')); ?></td><td class="text-end"><span class="badge bg-success fs-6"><?php echo (int) $range['total']; ?></span></td></tr><?php endforeach; ?>
+<?php if (!$availabilityByRange): ?><tr><td colspan="3" class="text-center text-muted py-4">No availability date ranges found.</td></tr><?php endif; ?></tbody></table></div></div></div>
+<div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><strong>Total Volunteers Available by Date</strong><span class="badge bg-primary"><?php echo count($availabilityByDate); ?> dates</span></div><div class="card-body p-0"><div class="table-responsive"><table class="table table-striped align-middle mb-0"><thead><tr><th>Date</th><th class="text-end">Total Volunteers Available</th></tr></thead><tbody>
+<?php foreach ($availabilityByDate as $date => $total): ?><tr><td><?php echo htmlspecialchars(date('d M Y', strtotime($date))); ?></td><td class="text-end"><span class="badge bg-success fs-6"><?php echo (int) $total; ?></span></td></tr><?php endforeach; ?>
+<?php if (!$availabilityByDate): ?><tr><td colspan="2" class="text-center text-muted py-4">No availability dates found.</td></tr><?php endif; ?></tbody></table></div></div></div>
 <div class="card"><div class="card-body"><div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Applicant</th><th>Preferences</th><th>Availability</th><th>Status</th><th></th></tr></thead><tbody>
 <?php foreach ($applications as $item): $identity = decryptVolunteerValue($item['identity_encrypted']); ?><tr><td><strong><?php echo htmlspecialchars($item['full_name']); ?></strong><div class="small text-muted"><?php echo htmlspecialchars($item['email']); ?><br><?php echo htmlspecialchars($item['whatsapp']); ?> · <?php echo strtoupper($item['identity_type']); ?> <?php echo htmlspecialchars(maskVolunteerIdentity($identity)); ?></div></td><td><?php echo ucfirst(htmlspecialchars($item['department'])); ?><div class="small text-muted"><?php echo htmlspecialchars($item['tshirt_size']); ?> · Accommodation: <?php echo $item['accommodation_required']?'Yes':'No'; ?></div></td><td><?php echo htmlspecialchars($item['available_from']); ?><?php echo $item['available_until'] ? '<br><span class="small text-muted">to ' . htmlspecialchars($item['available_until']) . '</span>' : ''; ?></td><td><span class="badge <?php echo $item['status']==='approved'?'bg-success':($item['status']==='rejected'?'bg-danger':'bg-warning text-dark'); ?>"><?php echo ucfirst($item['status']); ?></span></td><td><button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#application<?php echo $item['id']; ?>">View</button></td></tr>
 <div class="modal fade" id="application<?php echo $item['id']; ?>" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title h5"><?php echo htmlspecialchars($item['full_name']); ?></h2><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="row g-3"><div class="col-md-6"><strong>Age / Gender</strong><br><?php echo (int)$item['age']; ?> / <?php echo ucfirst($item['gender']); ?></div><div class="col-md-6"><strong>Occupation</strong><br><?php echo htmlspecialchars($item['occupation']); ?></div><div class="col-12"><strong>Address</strong><br><?php echo nl2br(htmlspecialchars(decryptVolunteerValue($item['address_encrypted']))); ?></div><div class="col-12"><strong>Medical conditions / allergies</strong><br><?php echo nl2br(htmlspecialchars(decryptVolunteerValue($item['medical_encrypted']))); ?></div><div class="col-12"><strong>Skills / experience</strong><br><?php echo nl2br(htmlspecialchars($item['skills'])); ?></div><div class="col-12"><strong>Motivation</strong><br><?php echo nl2br(htmlspecialchars($item['motivation'])); ?></div><?php if($item['review_note']): ?><div class="col-12"><strong>Review note</strong><br><?php echo nl2br(htmlspecialchars($item['review_note'])); ?></div><?php endif; ?></div></div>
