@@ -53,6 +53,36 @@ if ($status !== '') { $where[] = 'v.status = ?'; $params[] = $status; }
 if ($search !== '') { $where[] = '(v.full_name LIKE ? OR v.email LIKE ? OR v.whatsapp LIKE ?)'; $params = array_merge($params, array_fill(0, 3, '%' . $search . '%')); }
 $sql = 'SELECT v.*, u.username AS reviewer_name FROM volunteer_applications v LEFT JOIN users u ON u.id=v.reviewed_by' . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY v.created_at DESC';
 $stmt = $pdo->prepare($sql); $stmt->execute($params); $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$duplicateStmt = $pdo->query('SELECT id, identity_encrypted, whatsapp FROM volunteer_applications');
+$duplicateCandidates = $duplicateStmt->fetchAll(PDO::FETCH_ASSOC);
+$identityById = [];
+$identityCounts = [];
+$phoneKeysById = [];
+$phoneCounts = [];
+foreach ($duplicateCandidates as $candidate) {
+    $candidateId = (int) $candidate['id'];
+    $identity = decryptVolunteerValue($candidate['identity_encrypted']);
+    $identityById[$candidateId] = $identity;
+    $identityKey = strtoupper((string) preg_replace('/[^A-Z0-9]/i', '', $identity));
+    if ($identityKey !== '') { $identityCounts[$identityKey] = ($identityCounts[$identityKey] ?? 0) + 1; }
+    $phoneKey = (string) preg_replace('/\D+/', '', $candidate['whatsapp']);
+    if (str_starts_with($phoneKey, '0060')) { $phoneKey = '0' . substr($phoneKey, 4); }
+    elseif (str_starts_with($phoneKey, '60')) { $phoneKey = '0' . substr($phoneKey, 2); }
+    $phoneKeysById[$candidateId] = $phoneKey;
+    if ($phoneKey !== '') { $phoneCounts[$phoneKey] = ($phoneCounts[$phoneKey] ?? 0) + 1; }
+}
+$duplicateFlags = [];
+$duplicateRecordCount = 0;
+foreach ($duplicateCandidates as $candidate) {
+    $candidateId = (int) $candidate['id'];
+    $identityKey = strtoupper((string) preg_replace('/[^A-Z0-9]/i', '', $identityById[$candidateId] ?? ''));
+    $phoneKey = $phoneKeysById[$candidateId] ?? '';
+    $duplicateFlags[$candidateId] = [
+        'identity' => $identityKey !== '' && ($identityCounts[$identityKey] ?? 0) > 1,
+        'phone' => $phoneKey !== '' && ($phoneCounts[$phoneKey] ?? 0) > 1,
+    ];
+    if ($duplicateFlags[$candidateId]['identity'] || $duplicateFlags[$candidateId]['phone']) { $duplicateRecordCount++; }
+}
 $availabilityByRange = [];
 $availabilityByDate = [];
 foreach ($applications as $application) {
@@ -84,8 +114,9 @@ require_once 'includes/header.php';
 <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><strong>Total Volunteers Available by Date</strong><span class="badge bg-primary"><?php echo count($availabilityByDate); ?> dates</span></div><div class="card-body p-0"><div class="table-responsive"><table class="table table-striped align-middle mb-0"><thead><tr><th>Date</th><th class="text-end">Total Volunteers Available</th></tr></thead><tbody>
 <?php foreach ($availabilityByDate as $date => $total): ?><tr><td><?php echo htmlspecialchars(date('d M Y', strtotime($date))); ?></td><td class="text-end"><span class="badge bg-success fs-6"><?php echo (int) $total; ?></span></td></tr><?php endforeach; ?>
 <?php if (!$availabilityByDate): ?><tr><td colspan="2" class="text-center text-muted py-4">No availability dates found.</td></tr><?php endif; ?></tbody></table></div></div></div>
+<?php if ($duplicateRecordCount > 0): ?><div class="alert alert-warning d-flex justify-content-between align-items-center"><span><strong>Possible duplicate volunteers detected.</strong> Check matching IC/passport or phone-number badges below.</span><span class="badge bg-danger fs-6"><?php echo $duplicateRecordCount; ?> records</span></div><?php endif; ?>
 <div class="card"><div class="card-body"><div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Applicant</th><th>Preferences</th><th>Availability</th><th>Status</th><th></th></tr></thead><tbody>
-<?php foreach ($applications as $item): $identity = decryptVolunteerValue($item['identity_encrypted']); ?><tr><td><strong><?php echo htmlspecialchars($item['full_name']); ?></strong><div class="small text-muted"><?php echo htmlspecialchars($item['email']); ?><br><?php echo htmlspecialchars($item['whatsapp']); ?> · <?php echo strtoupper($item['identity_type']); ?> <?php echo htmlspecialchars(maskVolunteerIdentity($identity)); ?></div></td><td><?php echo ucfirst(htmlspecialchars($item['department'])); ?><div class="small text-muted"><?php echo htmlspecialchars($item['tshirt_size']); ?> · Accommodation: <?php echo $item['accommodation_required']?'Yes':'No'; ?></div></td><td><?php echo htmlspecialchars($item['available_from']); ?><?php echo $item['available_until'] ? '<br><span class="small text-muted">to ' . htmlspecialchars($item['available_until']) . '</span>' : ''; ?></td><td><span class="badge <?php echo $item['status']==='approved'?'bg-success':($item['status']==='rejected'?'bg-danger':'bg-warning text-dark'); ?>"><?php echo ucfirst($item['status']); ?></span></td><td><button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#application<?php echo $item['id']; ?>">View</button></td></tr>
+<?php foreach ($applications as $item): $itemId = (int) $item['id']; $identity = $identityById[$itemId] ?? decryptVolunteerValue($item['identity_encrypted']); $flags = $duplicateFlags[$itemId] ?? ['identity' => false, 'phone' => false]; ?><tr class="<?php echo ($flags['identity'] || $flags['phone']) ? 'table-warning' : ''; ?>"><td><strong><?php echo htmlspecialchars($item['full_name']); ?></strong><?php if ($flags['identity']): ?> <span class="badge bg-danger">Duplicate IC</span><?php endif; ?><?php if ($flags['phone']): ?> <span class="badge bg-danger">Duplicate phone</span><?php endif; ?><div class="small text-muted"><?php echo htmlspecialchars($item['email']); ?><br><?php echo htmlspecialchars($item['whatsapp']); ?> · <?php echo strtoupper($item['identity_type']); ?> <?php echo htmlspecialchars($identity); ?></div></td><td><?php echo ucfirst(htmlspecialchars($item['department'])); ?><div class="small text-muted"><?php echo htmlspecialchars($item['tshirt_size']); ?> · Accommodation: <?php echo $item['accommodation_required']?'Yes':'No'; ?></div></td><td><?php echo htmlspecialchars($item['available_from']); ?><?php echo $item['available_until'] ? '<br><span class="small text-muted">to ' . htmlspecialchars($item['available_until']) . '</span>' : ''; ?></td><td><span class="badge <?php echo $item['status']==='approved'?'bg-success':($item['status']==='rejected'?'bg-danger':'bg-warning text-dark'); ?>"><?php echo ucfirst($item['status']); ?></span></td><td><button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#application<?php echo $item['id']; ?>">View</button></td></tr>
 <div class="modal fade" id="application<?php echo $item['id']; ?>" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title h5"><?php echo htmlspecialchars($item['full_name']); ?></h2><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="row g-3"><div class="col-md-6"><strong>Age / Gender</strong><br><?php echo (int)$item['age']; ?> / <?php echo ucfirst($item['gender']); ?></div><div class="col-md-6"><strong>Occupation</strong><br><?php echo htmlspecialchars($item['occupation']); ?></div><div class="col-12"><strong>Address</strong><br><?php echo nl2br(htmlspecialchars(decryptVolunteerValue($item['address_encrypted']))); ?></div><div class="col-12"><strong>Medical conditions / allergies</strong><br><?php echo nl2br(htmlspecialchars(decryptVolunteerValue($item['medical_encrypted']))); ?></div><div class="col-12"><strong>Skills / experience</strong><br><?php echo nl2br(htmlspecialchars($item['skills'])); ?></div><div class="col-12"><strong>Motivation</strong><br><?php echo nl2br(htmlspecialchars($item['motivation'])); ?></div><?php if($item['review_note']): ?><div class="col-12"><strong>Review note</strong><br><?php echo nl2br(htmlspecialchars($item['review_note'])); ?></div><?php endif; ?></div></div>
 <?php if ($item['status']==='pending'): ?><div class="modal-footer"><form method="post" class="w-100"><input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(volunteerCsrfToken()); ?>"><input type="hidden" name="id" value="<?php echo $item['id']; ?>"><label class="form-label">Review note (optional)</label><textarea class="form-control mb-3" name="review_note" rows="2"></textarea><div class="d-flex justify-content-end gap-2"><button class="btn btn-outline-danger" name="action" value="reject" onclick="return confirm('Reject this application?')">Reject</button><button class="btn btn-success" name="action" value="approve" onclick="return confirm('Approve and email login credentials?')">Approve &amp; Email</button></div></form></div><?php endif; ?></div></div></div>
 <?php endforeach; ?><?php if(!$applications): ?><tr><td colspan="5" class="text-center text-muted py-4">No applications found.</td></tr><?php endif; ?></tbody></table></div></div></div>
