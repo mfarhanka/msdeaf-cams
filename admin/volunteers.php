@@ -85,7 +85,19 @@ foreach ($duplicateCandidates as $candidate) {
 }
 $availabilityByRange = [];
 $availabilityByDate = [];
+$accommodationTotals = ['Required' => 0, 'Not required' => 0];
+$departmentTotals = [];
+$shirtSizeTotals = [];
+$genderTotals = [];
 foreach ($applications as $application) {
+    $accommodationLabel = !empty($application['accommodation_required']) ? 'Required' : 'Not required';
+    $accommodationTotals[$accommodationLabel]++;
+    $departmentLabel = ucfirst(trim((string) ($application['department'] ?? '')) ?: 'Not specified');
+    $departmentTotals[$departmentLabel] = ($departmentTotals[$departmentLabel] ?? 0) + 1;
+    $shirtSizeLabel = trim((string) ($application['tshirt_size'] ?? '')) ?: 'Not specified';
+    $shirtSizeTotals[$shirtSizeLabel] = ($shirtSizeTotals[$shirtSizeLabel] ?? 0) + 1;
+    $genderLabel = ucfirst(trim((string) ($application['gender'] ?? '')) ?: 'Not specified');
+    $genderTotals[$genderLabel] = ($genderTotals[$genderLabel] ?? 0) + 1;
     if (empty($application['available_from'])) { continue; }
     try {
         $availableFrom = new DateTimeImmutable($application['available_from']);
@@ -104,6 +116,14 @@ foreach ($applications as $application) {
 }
 ksort($availabilityByRange);
 ksort($availabilityByDate);
+ksort($departmentTotals);
+$shirtSizeOrder = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', 'Not specified'];
+uksort($shirtSizeTotals, static function ($left, $right) use ($shirtSizeOrder) {
+    $leftPosition = array_search($left, $shirtSizeOrder, true);
+    $rightPosition = array_search($right, $shirtSizeOrder, true);
+    return ($leftPosition === false ? PHP_INT_MAX : $leftPosition) <=> ($rightPosition === false ? PHP_INT_MAX : $rightPosition);
+});
+ksort($genderTotals);
 require_once 'includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center border-bottom mb-3 pb-2"><div><h1 class="h2 mb-1">Volunteer Applications</h1><p class="text-muted mb-0">Review general volunteer-pool applications and issue approved accounts.</p></div><span class="badge bg-primary fs-6"><?php echo count($applications); ?> shown</span></div>
@@ -114,6 +134,12 @@ require_once 'includes/header.php';
 <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><strong>Total Volunteers Available by Date</strong><span class="badge bg-primary"><?php echo count($availabilityByDate); ?> dates</span></div><div class="card-body p-0"><div class="table-responsive"><table class="table table-striped align-middle mb-0"><thead><tr><th>Date</th><th class="text-end">Total Volunteers Available</th></tr></thead><tbody>
 <?php foreach ($availabilityByDate as $date => $total): ?><tr><td><?php echo htmlspecialchars(date('d M Y', strtotime($date))); ?></td><td class="text-end"><span class="badge bg-success fs-6"><?php echo (int) $total; ?></span></td></tr><?php endforeach; ?>
 <?php if (!$availabilityByDate): ?><tr><td colspan="2" class="text-center text-muted py-4">No availability dates found.</td></tr><?php endif; ?></tbody></table></div></div></div>
+<div class="row g-3 mb-3">
+<div class="col-lg-6"><div class="card h-100"><div class="card-header"><strong>Accommodation / Penginapan</strong></div><div class="table-responsive"><table class="table table-striped align-middle mb-0"><thead><tr><th>Requirement</th><th class="text-end">Total</th></tr></thead><tbody><?php foreach ($accommodationTotals as $label => $total): ?><tr><td><?php echo htmlspecialchars($label); ?></td><td class="text-end"><span class="badge bg-primary fs-6"><?php echo (int) $total; ?></span></td></tr><?php endforeach; ?></tbody></table></div></div></div>
+<div class="col-lg-6"><div class="card h-100"><div class="card-header"><strong>Department / Bahagian</strong></div><div class="table-responsive"><table class="table table-striped align-middle mb-0"><thead><tr><th>Department</th><th class="text-end">Total</th></tr></thead><tbody><?php foreach ($departmentTotals as $label => $total): ?><tr><td><?php echo htmlspecialchars($label); ?></td><td class="text-end"><span class="badge bg-primary fs-6"><?php echo (int) $total; ?></span></td></tr><?php endforeach; ?><?php if (!$departmentTotals): ?><tr><td colspan="2" class="text-center text-muted py-3">No data.</td></tr><?php endif; ?></tbody></table></div></div></div>
+<div class="col-lg-6"><div class="card h-100"><div class="card-header"><strong>Shirt Size</strong></div><div class="table-responsive"><table class="table table-striped align-middle mb-0"><thead><tr><th>Size</th><th class="text-end">Total</th></tr></thead><tbody><?php foreach ($shirtSizeTotals as $label => $total): ?><tr><td><?php echo htmlspecialchars($label); ?></td><td class="text-end"><span class="badge bg-primary fs-6"><?php echo (int) $total; ?></span></td></tr><?php endforeach; ?><?php if (!$shirtSizeTotals): ?><tr><td colspan="2" class="text-center text-muted py-3">No data.</td></tr><?php endif; ?></tbody></table></div></div></div>
+<div class="col-lg-6"><div class="card h-100"><div class="card-header"><strong>Gender</strong></div><div class="table-responsive"><table class="table table-striped align-middle mb-0"><thead><tr><th>Gender</th><th class="text-end">Total</th></tr></thead><tbody><?php foreach ($genderTotals as $label => $total): ?><tr><td><?php echo htmlspecialchars($label); ?></td><td class="text-end"><span class="badge bg-primary fs-6"><?php echo (int) $total; ?></span></td></tr><?php endforeach; ?><?php if (!$genderTotals): ?><tr><td colspan="2" class="text-center text-muted py-3">No data.</td></tr><?php endif; ?></tbody></table></div></div></div>
+</div>
 <?php if ($duplicateRecordCount > 0): ?><div class="alert alert-warning d-flex justify-content-between align-items-center"><span><strong>Possible duplicate volunteers detected.</strong> Check matching IC/passport or phone-number badges below.</span><span class="badge bg-danger fs-6"><?php echo $duplicateRecordCount; ?> records</span></div><?php endif; ?>
 <div class="card"><div class="card-body"><div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Applicant</th><th>Preferences</th><th>Availability</th><th>Status</th><th></th></tr></thead><tbody>
 <?php foreach ($applications as $item): $itemId = (int) $item['id']; $identity = $identityById[$itemId] ?? decryptVolunteerValue($item['identity_encrypted']); $flags = $duplicateFlags[$itemId] ?? ['identity' => false, 'phone' => false]; ?><tr class="<?php echo ($flags['identity'] || $flags['phone']) ? 'table-warning' : ''; ?>"><td><strong><?php echo htmlspecialchars($item['full_name']); ?></strong><?php if ($flags['identity']): ?> <span class="badge bg-danger">Duplicate IC</span><?php endif; ?><?php if ($flags['phone']): ?> <span class="badge bg-danger">Duplicate phone</span><?php endif; ?><div class="small text-muted"><?php echo htmlspecialchars($item['email']); ?><br><?php echo htmlspecialchars($item['whatsapp']); ?> · <?php echo strtoupper($item['identity_type']); ?> <?php echo htmlspecialchars($identity); ?></div></td><td><?php echo ucfirst(htmlspecialchars($item['department'])); ?><div class="small text-muted"><?php echo htmlspecialchars($item['tshirt_size']); ?> · Accommodation: <?php echo $item['accommodation_required']?'Yes':'No'; ?></div></td><td><?php echo htmlspecialchars($item['available_from']); ?><?php echo $item['available_until'] ? '<br><span class="small text-muted">to ' . htmlspecialchars($item['available_until']) . '</span>' : ''; ?></td><td><span class="badge <?php echo $item['status']==='approved'?'bg-success':($item['status']==='rejected'?'bg-danger':'bg-warning text-dark'); ?>"><?php echo ucfirst($item['status']); ?></span></td><td><button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#application<?php echo $item['id']; ?>">View</button></td></tr>
