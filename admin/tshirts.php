@@ -26,6 +26,26 @@ $summaryStmt = $pdo->query("SELECT
     ORDER BY u.country_name ASC");
 $delegationSummary = $summaryStmt->fetchAll(PDO::FETCH_ASSOC);
 
+$sizeTotalsByCountry = [];
+$countrySizeTotalsStmt = $pdo->query("SELECT
+    u.id AS country_id,
+    a.tshirt_size,
+    COUNT(a.id) AS total
+    FROM users u
+    LEFT JOIN athletes a
+        ON a.country_id = u.id
+        AND a.tshirt_size IS NOT NULL
+        AND a.tshirt_size <> ''
+    WHERE u.role = 'country_manager'
+    GROUP BY u.id, a.tshirt_size");
+foreach ($countrySizeTotalsStmt->fetchAll(PDO::FETCH_ASSOC) as $sizeRow) {
+    $countryId = (int) $sizeRow['country_id'];
+    $sizeKey = (string) ($sizeRow['tshirt_size'] ?? '');
+    if ($sizeKey !== '' && in_array($sizeKey, $sizeOptions, true)) {
+        $sizeTotalsByCountry[$countryId][$sizeKey] = (int) $sizeRow['total'];
+    }
+}
+
 $sizeTotals = array_fill_keys($sizeOptions, 0);
 $sizeTotalsStmt = $pdo->query("SELECT tshirt_size, COUNT(*) AS total FROM athletes WHERE tshirt_size IS NOT NULL AND tshirt_size <> '' GROUP BY tshirt_size");
 foreach ($sizeTotalsStmt->fetchAll(PDO::FETCH_ASSOC) as $sizeRow) {
@@ -117,6 +137,7 @@ require_once 'includes/header.php';
                             <th>Country</th>
                             <th>Total Athletes</th>
                             <th>Sizes Submitted</th>
+                            <th>Shirt Size Groups</th>
                             <th>Pending</th>
                         </tr>
                     </thead>
@@ -126,6 +147,20 @@ require_once 'includes/header.php';
                                 <td class="fw-semibold"><?php echo htmlspecialchars($row['country_name']); ?></td>
                                 <td><?php echo intval($row['athlete_count']); ?></td>
                                 <td><?php echo intval($row['sized_count']); ?></td>
+                                <td>
+                                    <?php $countrySizeTotals = $sizeTotalsByCountry[(int) $row['id']] ?? []; ?>
+                                    <?php if ($countrySizeTotals): ?>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            <?php foreach ($sizeOptions as $sizeOption): ?>
+                                                <?php if (!empty($countrySizeTotals[$sizeOption])): ?>
+                                                    <span class="badge bg-primary-subtle text-primary border"><?php echo htmlspecialchars($sizeOption); ?>: <?php echo $countrySizeTotals[$sizeOption]; ?></span>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <span class="text-muted">No sizes submitted</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?php echo intval($row['pending_count']); ?></td>
                             </tr>
                         <?php endforeach; ?>
