@@ -94,6 +94,7 @@ require_once 'includes/header.php';
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">T-Shirt Size Overview</h1>
+    <a class="btn btn-outline-danger" href="tshirts_export.php"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</a>
 </div>
 
 <div class="card shadow-sm mb-3">
