@@ -51,9 +51,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
 $roomGroups = [];
 $roomLoadError = '';
 try {
+    $movementTableExists = (bool) $pdo->query("SHOW TABLES LIKE 'delegation_flight_movements'")->fetchColumn();
+    $movementMemberTableExists = (bool) $pdo->query("SHOW TABLES LIKE 'delegation_flight_movement_members'")->fetchColumn();
+    $flightDateSelect = $movementTableExists && $movementMemberTableExists
+        ? ", (SELECT MIN(arrival.flight_datetime)
+                FROM delegation_flight_movement_members arrival_member
+                JOIN delegation_flight_movements arrival ON arrival.id = arrival_member.movement_id
+                WHERE arrival_member.athlete_id = a.id AND arrival.direction = 'arrival') AS arrival_datetime,
+            (SELECT MAX(departure.flight_datetime)
+                FROM delegation_flight_movement_members departure_member
+                JOIN delegation_flight_movements departure ON departure.id = departure_member.movement_id
+                WHERE departure_member.athlete_id = a.id AND departure.direction = 'departure') AS departure_datetime"
+        : ", NULL AS arrival_datetime, NULL AS departure_datetime";
     $rowsStmt = $pdo->prepare("SELECT b.id AS booking_id, c.title AS championship_title,
             u.country_name, u.username AS delegation_username, rt.name AS room_type_name, rt.capacity,
-            ra.room_number, a.first_name, a.last_name, a.gender
+            ra.room_number, a.first_name, a.last_name, a.gender {$flightDateSelect}
         FROM room_assignments ra
         JOIN bookings b ON b.id = ra.booking_id
         JOIN athletes a ON a.id = ra.athlete_id
@@ -84,6 +96,8 @@ try {
         $roomGroups[$groupKey]['guest_names'][] = [
             'name' => trim((string) $row['first_name'] . ' ' . (string) $row['last_name']),
             'gender' => (string) $row['gender'],
+            'arrival_datetime' => $row['arrival_datetime'],
+            'departure_datetime' => $row['departure_datetime'],
         ];
     }
 
@@ -120,15 +134,37 @@ $pendingRoomCount = max(0, $totalAssignedRooms - $updatedRoomCount);
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
         .guest-list { min-width: 220px; }
+        .guest-travel { min-width: 250px; }
         .room-entry { min-width: 210px; }
         .table > :not(caption) > * > * { padding: .85rem .75rem; }
     </style>
 </head>
 <body class="bg-light">
+<?php $isAdminImpersonating = isset($_SESSION['impersonator_admin']) && is_array($_SESSION['impersonator_admin']); ?>
+<?php if ($isAdminImpersonating): ?>
+<div class="alert alert-warning rounded-0 border-0 mb-0 py-2 text-center">
+    <i class="bi bi-eye-fill me-1"></i>
+    Viewing the hotel portal as <strong><?php echo htmlspecialchars($currentUser['hotel_name']); ?></strong>.
+    <form method="post" action="../stop_impersonation.php" class="d-inline">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string) ($_SESSION['impersonation_return_csrf'] ?? '')); ?>">
+        <button class="btn btn-sm btn-dark ms-2" type="submit"><i class="bi bi-arrow-return-left me-1"></i>Return to Admin</button>
+    </form>
+</div>
+<?php endif; ?>
 <nav class="navbar navbar-dark" style="background:#004a99">
     <div class="container-fluid px-3 px-md-4">
         <span class="navbar-brand"><i class="bi bi-building-check me-2"></i><?php echo htmlspecialchars($currentUser['hotel_name']); ?></span>
-        <div class="d-flex align-items-center gap-3 text-white"><span class="d-none d-md-inline"><?php echo htmlspecialchars($currentUser['username']); ?></span><a class="btn btn-outline-light btn-sm" href="../logout.php">Logout</a></div>
+        <div class="d-flex align-items-center gap-3 text-white">
+            <span class="d-none d-md-inline"><?php echo htmlspecialchars($currentUser['username']); ?></span>
+            <?php if ($isAdminImpersonating): ?>
+                <form method="post" action="../stop_impersonation.php">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string) ($_SESSION['impersonation_return_csrf'] ?? '')); ?>">
+                    <button class="btn btn-warning btn-sm" type="submit"><i class="bi bi-arrow-return-left me-1"></i>Return to Admin</button>
+                </form>
+            <?php else: ?>
+                <a class="btn btn-outline-light btn-sm" href="../logout.php">Logout</a>
+            <?php endif; ?>
+        </div>
     </div>
 </nav>
 <main class="container-fluid px-3 px-md-4 py-4">
@@ -164,7 +200,7 @@ $pendingRoomCount = max(0, $totalAssignedRooms - $updatedRoomCount);
                 <div id="<?php echo $accordionId; ?>" class="accordion-collapse collapse <?php echo $accordionIndex === 0 ? 'show' : ''; ?>" aria-labelledby="heading-<?php echo $accordionId; ?>" data-bs-parent="#delegationAccordion">
                     <div class="accordion-body p-0"><div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light"><tr><th>#</th><th>Championship</th><th>Room Type</th><th>Assigned Guests</th><th>Room Number</th></tr></thead>
+                <thead class="table-light"><tr><th>#</th><th>Championship</th><th>Room Type</th><th>Assigned Guests</th><th>Arrival / Departure</th><th>Room Number</th></tr></thead>
                 <tbody>
                 <?php foreach ($delegationRooms as $index => $group): ?>
                     <?php
@@ -181,6 +217,15 @@ $pendingRoomCount = max(0, $totalAssignedRooms - $updatedRoomCount);
                                 <div class="d-flex align-items-center gap-2 mb-1">
                                     <span><?php echo htmlspecialchars($guest['name']); ?></span>
                                     <span class="badge rounded-pill <?php echo $guest['gender'] === 'F' ? 'text-bg-danger' : ($guest['gender'] === 'M' ? 'text-bg-primary' : 'text-bg-secondary'); ?>"><?php echo htmlspecialchars($guest['gender']); ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                        </td>
+                        <td class="guest-travel">
+                            <?php foreach ($group['guest_names'] as $guest): ?>
+                                <div class="mb-2 pb-2 border-bottom">
+                                    <div class="small fw-semibold"><?php echo htmlspecialchars($guest['name']); ?></div>
+                                    <div class="small"><i class="bi bi-airplane-engines text-primary me-1"></i>Arrival: <?php echo $guest['arrival_datetime'] ? htmlspecialchars(date('d M Y, H:i', strtotime($guest['arrival_datetime']))) : '<span class="text-muted">Not provided</span>'; ?></div>
+                                    <div class="small"><i class="bi bi-airplane text-success me-1"></i>Departure: <?php echo $guest['departure_datetime'] ? htmlspecialchars(date('d M Y, H:i', strtotime($guest['departure_datetime']))) : '<span class="text-muted">Not provided</span>'; ?></div>
                                 </div>
                             <?php endforeach; ?>
                         </td>

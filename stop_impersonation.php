@@ -29,27 +29,35 @@ if (!$admin || ($admin['status'] ?? 'active') !== 'active') {
 
 $delegationId = isset($_SESSION['id']) ? (int) $_SESSION['id'] : null;
 $delegationUsername = isset($_SESSION['username']) ? (string) $_SESSION['username'] : null;
+$impersonationContext = isset($_SESSION['impersonation_context']) && is_array($_SESSION['impersonation_context'])
+    ? $_SESSION['impersonation_context']
+    : [];
+$targetRole = (string) ($impersonationContext['target_role'] ?? ($_SESSION['role'] ?? ''));
+$returnPath = (string) ($impersonationContext['return_path'] ?? 'admin/delegations.php');
+if (!in_array($returnPath, ['admin/delegations.php', 'admin/hotel_accounts.php'], true)) {
+    $returnPath = 'admin/dashboard.php';
+}
 
 $_SESSION['loggedin'] = true;
 $_SESSION['id'] = (int) $admin['id'];
 $_SESSION['username'] = (string) $admin['username'];
 $_SESSION['role'] = 'admin';
-unset($_SESSION['impersonator_admin'], $_SESSION['show_login_announcement'], $_SESSION['impersonation_return_csrf']);
+unset($_SESSION['impersonator_admin'], $_SESSION['impersonation_context'], $_SESSION['show_login_announcement'], $_SESSION['impersonation_return_csrf']);
 $_SESSION['delegation_impersonation_csrf'] = bin2hex(random_bytes(32));
 session_regenerate_id(true);
 
 recordActivity(
     $pdo,
-    'delegation_impersonation_ended',
+    $targetRole === 'hotel' ? 'hotel_impersonation_ended' : 'delegation_impersonation_ended',
     'user',
     $delegationId,
-    'Administrator returned from the delegation portal.',
-    ['delegation_username' => $delegationUsername],
+    $targetRole === 'hotel' ? 'Administrator returned from the hotel portal.' : 'Administrator returned from the delegation portal.',
+    ['target_role' => $targetRole, 'target_username' => $delegationUsername],
     (int) $admin['id'],
     'admin',
     (string) $admin['username']
 );
 
-header('location: admin/delegations.php');
+header('location: ' . $returnPath);
 exit;
 ?>

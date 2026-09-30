@@ -53,6 +53,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'username' => (string) $actor['username'],
                 'role' => 'admin',
             ];
+            $_SESSION['impersonation_context'] = [
+                'target_role' => 'country_manager',
+                'target_username' => (string) $delegation['username'],
+                'return_path' => 'admin/delegations.php',
+            ];
             $_SESSION['id'] = $delegationId;
             $_SESSION['username'] = $delegation['username'];
             $_SESSION['role'] = 'country_manager';

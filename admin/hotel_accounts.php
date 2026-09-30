@@ -3,11 +3,56 @@ require_once __DIR__ . '/includes/auth.php';
 
 $actor = getActorDetailsFromSession();
 
+if (empty($_SESSION['hotel_impersonation_csrf'])) {
+    $_SESSION['hotel_impersonation_csrf'] = bin2hex(random_bytes(32));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = (string) $_POST['action'];
     $accountId = (int) ($_POST['id'] ?? 0);
 
-    if ($action === 'save_hotel_account') {
+    if ($action === 'impersonate_hotel') {
+        $csrfToken = (string) ($_POST['csrf_token'] ?? '');
+        $stmt = $pdo->prepare("SELECT u.id, u.username, u.status, u.hotel_id, h.name AS hotel_name
+            FROM users u LEFT JOIN hotels h ON h.id = u.hotel_id
+            WHERE u.id = ? AND u.role = 'hotel' LIMIT 1");
+        $stmt->execute([$accountId]);
+        $account = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!hash_equals((string) $_SESSION['hotel_impersonation_csrf'], $csrfToken)) {
+            $msg = '<div class="alert alert-danger">The login request expired. Please try again.</div>';
+        } elseif (!$account || empty($account['hotel_id']) || empty($account['hotel_name'])) {
+            $msg = '<div class="alert alert-warning">Hotel account not found or is no longer linked to a hotel.</div>';
+        } elseif (($account['status'] ?? 'active') !== 'active') {
+            $msg = '<div class="alert alert-warning">Suspended hotel accounts cannot be opened.</div>';
+        } else {
+            recordActivity($pdo, 'hotel_impersonation_started', 'user', $accountId,
+                'Administrator opened the hotel portal as this account.',
+                ['hotel_id' => (int) $account['hotel_id'], 'hotel_name' => $account['hotel_name'], 'hotel_username' => $account['username']],
+                $actor['id'], $actor['role'], $actor['username']);
+
+            $_SESSION['impersonator_admin'] = [
+                'id' => (int) $actor['id'],
+                'username' => (string) $actor['username'],
+                'role' => 'admin',
+            ];
+            $_SESSION['impersonation_context'] = [
+                'target_role' => 'hotel',
+                'target_username' => (string) $account['username'],
+                'return_path' => 'admin/hotel_accounts.php',
+            ];
+            $_SESSION['loggedin'] = true;
+            $_SESSION['id'] = (int) $account['id'];
+            $_SESSION['username'] = (string) $account['username'];
+            $_SESSION['role'] = 'hotel';
+            unset($_SESSION['hotel_impersonation_csrf'], $_SESSION['show_login_announcement']);
+            $_SESSION['impersonation_return_csrf'] = bin2hex(random_bytes(32));
+            session_regenerate_id(true);
+
+            header('location: ../hotel/rooms.php');
+            exit;
+        }
+    } elseif ($action === 'save_hotel_account') {
         $username = trim((string) ($_POST['username'] ?? ''));
         $password = (string) ($_POST['password'] ?? '');
         $hotelId = (int) ($_POST['hotel_id'] ?? 0);
@@ -81,11 +126,32 @@ require_once __DIR__ . '/includes/header.php';
     <table class="table align-middle mb-0"><thead><tr><th>Hotel</th><th>Username</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>
     <?php foreach ($accounts as $account): ?>
         <tr>
-            <td class="fw-semibold"><?php echo htmlspecialchars($account['hotel_name'] ?? 'Hotel removed'); ?></td>
+            <td class="fw-semibold">
+                <?php if ($account['status'] === 'active' && !empty($account['hotel_id']) && !empty($account['hotel_name'])): ?>
+                    <form method="post" class="d-inline" onsubmit="return confirm('Open the hotel portal as <?php echo htmlspecialchars(addslashes($account['hotel_name']), ENT_QUOTES); ?>?');">
+                        <input type="hidden" name="action" value="impersonate_hotel">
+                        <input type="hidden" name="id" value="<?php echo (int) $account['id']; ?>">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['hotel_impersonation_csrf']); ?>">
+                        <button class="btn btn-link p-0 fw-semibold text-decoration-none" type="submit" title="Log in as this hotel">
+                            <?php echo htmlspecialchars($account['hotel_name']); ?> <i class="bi bi-box-arrow-up-right small"></i>
+                        </button>
+                    </form>
+                <?php else: ?>
+                    <?php echo htmlspecialchars($account['hotel_name'] ?? 'Hotel removed'); ?>
+                <?php endif; ?>
+            </td>
             <td><?php echo htmlspecialchars($account['username']); ?></td>
             <td><span class="badge <?php echo $account['status'] === 'active' ? 'text-bg-success' : 'text-bg-warning'; ?>"><?php echo htmlspecialchars(ucfirst($account['status'])); ?></span></td>
             <td><?php echo htmlspecialchars(date('Y-m-d', strtotime($account['created_at']))); ?></td>
             <td class="d-flex gap-1">
+                <?php if ($account['status'] === 'active' && !empty($account['hotel_id']) && !empty($account['hotel_name'])): ?>
+                    <form method="post" onsubmit="return confirm('Open the hotel portal as <?php echo htmlspecialchars(addslashes($account['hotel_name']), ENT_QUOTES); ?>?');">
+                        <input type="hidden" name="action" value="impersonate_hotel">
+                        <input type="hidden" name="id" value="<?php echo (int) $account['id']; ?>">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['hotel_impersonation_csrf']); ?>">
+                        <button class="btn btn-sm btn-success" type="submit" title="Log in as hotel"><i class="bi bi-box-arrow-in-right"></i></button>
+                    </form>
+                <?php endif; ?>
                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editAccount<?php echo (int) $account['id']; ?>"><i class="bi bi-pencil"></i></button>
                 <form method="post"><input type="hidden" name="action" value="toggle_hotel_account"><input type="hidden" name="id" value="<?php echo (int) $account['id']; ?>"><button class="btn btn-sm btn-outline-<?php echo $account['status'] === 'active' ? 'warning' : 'success'; ?>"><?php echo $account['status'] === 'active' ? 'Suspend' : 'Activate'; ?></button></form>
             </td>
