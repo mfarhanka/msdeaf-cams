@@ -173,6 +173,19 @@ if (!empty($_SESSION['show_login_announcement']) && isset($pdo)) {
 </head>
 <body>
 
+<?php $isAdminImpersonating = isset($_SESSION['impersonator_admin']) && is_array($_SESSION['impersonator_admin']); ?>
+
+<?php if ($isAdminImpersonating): ?>
+<div class="alert alert-warning rounded-0 border-0 mb-0 py-2 text-center">
+    <i class="bi bi-eye-fill me-1"></i>
+    Viewing the delegate portal as <strong><?php echo htmlspecialchars($_SESSION['username']); ?></strong>.
+    <form method="POST" action="../stop_impersonation.php" class="d-inline">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string) ($_SESSION['impersonation_return_csrf'] ?? '')); ?>">
+        <button type="submit" class="btn btn-sm btn-dark ms-2"><i class="bi bi-arrow-return-left me-1"></i>Return to Admin</button>
+    </form>
+</div>
+<?php endif; ?>
+
 <nav class="navbar navbar-expand-lg">
     <div class="container-fluid">
         <div class="d-flex align-items-center min-w-0">
@@ -183,7 +196,14 @@ if (!empty($_SESSION['show_login_announcement']) && isset($pdo)) {
         </div>
         <div class="d-none d-md-flex align-items-center">
             <span class="text-white small me-3"><i class="bi bi-person-circle me-1"></i> Delegation: <?php echo htmlspecialchars($_SESSION['username']); ?></span>
-            <a href="../logout.php" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
+            <?php if ($isAdminImpersonating): ?>
+                <form method="POST" action="../stop_impersonation.php">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string) ($_SESSION['impersonation_return_csrf'] ?? '')); ?>">
+                    <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-arrow-return-left"></i> Return to Admin</button>
+                </form>
+            <?php else: ?>
+                <a href="../logout.php" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
+            <?php endif; ?>
         </div>
     </div>
 </nav>
@@ -200,7 +220,14 @@ if (!empty($_SESSION['show_login_announcement']) && isset($pdo)) {
                 <a class="nav-link w-100 text-start <?php echo $current_page == $menuItem['href'] ? 'active' : ''; ?>" href="<?php echo htmlspecialchars($menuItem['href']); ?>"><i class="bi <?php echo htmlspecialchars($menuItem['icon']); ?> me-2"></i><?php echo htmlspecialchars($menuItem['label']); ?><?php if (!empty($menuItem['badge'])): ?><span class="badge rounded-pill text-bg-danger ms-2"><?php echo htmlspecialchars($menuItem['badge']); ?></span><?php endif; ?></a>
             <?php endforeach; ?>
         </div>
-        <a href="../logout.php" class="btn btn-outline-danger mt-auto"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+        <?php if ($isAdminImpersonating): ?>
+            <form method="POST" action="../stop_impersonation.php" class="mt-auto">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string) ($_SESSION['impersonation_return_csrf'] ?? '')); ?>">
+                <button type="submit" class="btn btn-warning w-100"><i class="bi bi-arrow-return-left me-1"></i>Return to Admin</button>
+            </form>
+        <?php else: ?>
+            <a href="../logout.php" class="btn btn-outline-danger mt-auto"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+        <?php endif; ?>
     </div>
 </div>
 

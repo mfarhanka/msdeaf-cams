@@ -11,11 +11,119 @@ function fetchDelegationById(PDO $pdo, int $delegationId): ?array
     return $delegation ?: null;
 }
 
+function delegationRoomingLockSettingKey(int $delegationId): string
+{
+    return 'delegation_rooming_locked_' . $delegationId;
+}
+
+if (empty($_SESSION['delegation_impersonation_csrf'])) {
+    $_SESSION['delegation_impersonation_csrf'] = bin2hex(random_bytes(32));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $actor = getActorDetailsFromSession();
     $delegateMenuItems = getDelegateMenuItems();
 
-    if ($_POST['action'] === 'toggle_delegate_menu_item') {
+    if ($_POST['action'] === 'impersonate_delegation') {
+        $csrfToken = (string) ($_POST['csrf_token'] ?? '');
+        $delegationId = (int) ($_POST['id'] ?? 0);
+        $delegation = fetchDelegationById($pdo, $delegationId);
+
+        if (!hash_equals((string) $_SESSION['delegation_impersonation_csrf'], $csrfToken)) {
+            $msg = "<div class='alert alert-danger alert-dismissible fade show'>The login request expired. Please try again.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        } elseif (!$delegation) {
+            $msg = "<div class='alert alert-warning alert-dismissible fade show'>Delegation account not found.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        } elseif (($delegation['status'] ?? 'active') !== 'active') {
+            $msg = "<div class='alert alert-warning alert-dismissible fade show'>Suspended delegations cannot be opened.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        } else {
+            recordActivity(
+                $pdo,
+                'delegation_impersonation_started',
+                'user',
+                $delegationId,
+                'Administrator opened the delegation portal as this country.',
+                ['delegation_username' => $delegation['username'], 'country_name' => $delegation['country_name']],
+                $actor['id'],
+                $actor['role'],
+                $actor['username']
+            );
+
+            $_SESSION['impersonator_admin'] = [
+                'id' => (int) $actor['id'],
+                'username' => (string) $actor['username'],
+                'role' => 'admin',
+            ];
+            $_SESSION['id'] = $delegationId;
+            $_SESSION['username'] = $delegation['username'];
+            $_SESSION['role'] = 'country_manager';
+            $_SESSION['loggedin'] = true;
+            unset($_SESSION['show_login_announcement'], $_SESSION['delegation_impersonation_csrf']);
+            $_SESSION['impersonation_return_csrf'] = bin2hex(random_bytes(32));
+            session_regenerate_id(true);
+
+            header('location: ../country/dashboard.php');
+            exit;
+        }
+    } elseif ($_POST['action'] === 'set_all_rooming_locks') {
+        $lockAll = (int) ($_POST['id'] ?? 0) === 1;
+        $delegationIds = $pdo->query("SELECT id FROM users WHERE role = 'country_manager'")->fetchAll(PDO::FETCH_COLUMN);
+
+        try {
+            $pdo->beginTransaction();
+            foreach ($delegationIds as $delegationId) {
+                setAppSetting($pdo, delegationRoomingLockSettingKey((int) $delegationId), $lockAll ? '1' : '0');
+            }
+            $pdo->commit();
+
+            recordActivity(
+                $pdo,
+                $lockAll ? 'all_delegation_rooming_locked' : 'all_delegation_rooming_unlocked',
+                'app_setting',
+                null,
+                'Accommodation editing access updated for all delegations.',
+                ['rooming_locked' => $lockAll, 'delegation_count' => count($delegationIds)],
+                $actor['id'],
+                $actor['role'],
+                $actor['username'],
+                formatTelegramActivityMessage('CAMS accommodation editing access', ['Action: ' . ($lockAll ? 'lock all delegations' : 'unlock all delegations'), 'By: ' . $actor['username'], 'Delegations: ' . count($delegationIds)])
+            );
+
+            $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi " . ($lockAll ? 'bi-lock-fill' : 'bi-unlock') . " me-1'></i> Accommodation editing was " . ($lockAll ? 'locked' : 'unlocked') . " for " . count($delegationIds) . " delegation(s).<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $msg = "<div class='alert alert-danger alert-dismissible fade show'>Unable to update all delegations right now.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        }
+    } elseif ($_POST['action'] === 'toggle_rooming_lock') {
+        $id = (int) ($_POST['id'] ?? 0);
+        $delegation = fetchDelegationById($pdo, $id);
+
+        if (!$delegation) {
+            $msg = "<div class='alert alert-warning alert-dismissible fade show'>Delegation account not found.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        } else {
+            $settingKey = delegationRoomingLockSettingKey($id);
+            $isLocked = isAppSettingEnabled($pdo, $settingKey, false);
+            $newValue = $isLocked ? '0' : '1';
+            setAppSetting($pdo, $settingKey, $newValue);
+
+            recordActivity(
+                $pdo,
+                $newValue === '1' ? 'delegation_rooming_locked' : 'delegation_rooming_unlocked',
+                'user',
+                $id,
+                'Delegation accommodation editing access updated.',
+                ['username' => $delegation['username'], 'country_name' => $delegation['country_name'], 'rooming_locked' => $newValue === '1'],
+                $actor['id'],
+                $actor['role'],
+                $actor['username'],
+                formatTelegramActivityMessage('CAMS accommodation editing access', ['Action: ' . ($newValue === '1' ? 'lock booking and room editing' : 'unlock booking and room editing'), 'By: ' . $actor['username'], 'Country: ' . $delegation['country_name']])
+            );
+
+            $stateLabel = $newValue === '1' ? 'locked' : 'unlocked';
+            $msg = "<div class='alert alert-success alert-dismissible fade show'><i class='bi bi-lock me-1'></i> Booking and room editing for " . htmlspecialchars($delegation['country_name']) . " is now {$stateLabel}.<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>";
+        }
+    } elseif ($_POST['action'] === 'toggle_delegate_menu_item') {
         $menuItemKey = (string) ($_POST['menu_item_key'] ?? '');
         $menuItem = $delegateMenuItems[$menuItemKey] ?? null;
 
@@ -188,11 +296,13 @@ $delegations_stmt = $pdo->query(
 $delegations = $delegations_stmt->fetchAll(PDO::FETCH_ASSOC);
 $activeDelegationCount = 0;
 
-foreach ($delegations as $delegation) {
+foreach ($delegations as &$delegation) {
+    $delegation['rooming_locked'] = isAppSettingEnabled($pdo, delegationRoomingLockSettingKey((int) $delegation['id']), false);
     if (($delegation['status'] ?? 'active') === 'active') {
         $activeDelegationCount++;
     }
 }
+unset($delegation);
 
 require_once 'includes/header.php';
 ?>
@@ -202,9 +312,39 @@ require_once 'includes/header.php';
         <h1 class="h2 mb-1">Delegation Management</h1>
         <p class="text-muted mb-0">Manage country accounts, credentials, and access status.</p>
     </div>
-    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addDelegationModal">
-        <i class="bi bi-plus-lg me-1"></i> Add Delegation
-    </button>
+    <div class="d-flex flex-wrap gap-2">
+        <button
+            type="button"
+            class="btn btn-outline-danger btn-sm"
+            data-bs-toggle="modal"
+            data-bs-target="#delegationActionModal"
+            data-action="set_all_rooming_locks"
+            data-id="1"
+            data-title="Lock All Accommodation Editing"
+            data-message="All countries will be unable to create bookings or change room assignments. Existing booking edits and removals remain admin-only."
+            data-button-class="btn-danger"
+            data-button-label="Lock All"
+        >
+            <i class="bi bi-lock-fill me-1"></i> Lock All
+        </button>
+        <button
+            type="button"
+            class="btn btn-outline-success btn-sm"
+            data-bs-toggle="modal"
+            data-bs-target="#delegationActionModal"
+            data-action="set_all_rooming_locks"
+            data-id="0"
+            data-title="Unlock All Accommodation Editing"
+            data-message="All countries will regain permission to create bookings and manage room assignments. Existing booking edits and removals remain admin-only."
+            data-button-class="btn-success"
+            data-button-label="Unlock All"
+        >
+            <i class="bi bi-unlock me-1"></i> Unlock All
+        </button>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addDelegationModal">
+            <i class="bi bi-plus-lg me-1"></i> Add Delegation
+        </button>
+    </div>
 </div>
 
 <div class="row g-3 mb-3">
@@ -296,6 +436,7 @@ require_once 'includes/header.php';
                             <th>Username</th>
                             <th>Country</th>
                             <th>Status</th>
+                            <th>Accommodation Editing</th>
                             <th>Athletes</th>
                             <th>Bookings</th>
                             <th>Audit</th>
@@ -307,13 +448,31 @@ require_once 'includes/header.php';
                         <tr>
                             <td><?php echo htmlspecialchars($d['id']); ?></td>
                             <td class="fw-bold"><?php echo htmlspecialchars($d['username']); ?></td>
-                            <td><?php echo htmlspecialchars($d['country_name']); ?></td>
+                            <td>
+                                <?php if (($d['status'] ?? 'active') === 'active'): ?>
+                                    <form method="POST" class="d-inline" onsubmit="return confirm('Open the delegate portal as <?php echo htmlspecialchars(addslashes($d['country_name']), ENT_QUOTES); ?>?');">
+                                        <input type="hidden" name="action" value="impersonate_delegation">
+                                        <input type="hidden" name="id" value="<?php echo (int) $d['id']; ?>">
+                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['delegation_impersonation_csrf']); ?>">
+                                        <button type="submit" class="btn btn-link p-0 fw-semibold text-decoration-none" title="Log in as this delegate">
+                                            <?php echo htmlspecialchars($d['country_name']); ?> <i class="bi bi-box-arrow-up-right small"></i>
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <?php echo htmlspecialchars($d['country_name']); ?>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <?php if (($d['status'] ?? 'active') === 'active'): ?>
                                     <span class="badge rounded-pill text-bg-success">Active</span>
                                 <?php else: ?>
                                     <span class="badge rounded-pill text-bg-warning">Suspended</span>
                                 <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill <?php echo !empty($d['rooming_locked']) ? 'text-bg-danger' : 'text-bg-success'; ?>">
+                                    <i class="bi <?php echo !empty($d['rooming_locked']) ? 'bi-lock-fill' : 'bi-unlock'; ?> me-1"></i><?php echo !empty($d['rooming_locked']) ? 'Locked' : 'Open'; ?>
+                                </span>
                             </td>
                             <td><?php echo htmlspecialchars($d['athlete_count']); ?></td>
                             <td><?php echo htmlspecialchars($d['booking_count']); ?></td>
@@ -327,8 +486,33 @@ require_once 'includes/header.php';
                                 <?php endif; ?>
                             </td>
                             <td>
+                                <?php if (($d['status'] ?? 'active') === 'active'): ?>
+                                <form method="POST" class="d-inline" onsubmit="return confirm('Open the delegate portal as <?php echo htmlspecialchars(addslashes($d['country_name']), ENT_QUOTES); ?>?');">
+                                    <input type="hidden" name="action" value="impersonate_delegation">
+                                    <input type="hidden" name="id" value="<?php echo (int) $d['id']; ?>">
+                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['delegation_impersonation_csrf']); ?>">
+                                    <button type="submit" class="btn btn-sm btn-success" title="Log in as delegate">
+                                        <i class="bi bi-box-arrow-in-right"></i>
+                                    </button>
+                                </form>
+                                <?php endif; ?>
                                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editDelegationModal<?php echo $d['id']; ?>">
                                     <i class="fas fa-edit"></i>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm <?php echo !empty($d['rooming_locked']) ? 'btn-outline-success' : 'btn-outline-danger'; ?>"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#delegationActionModal"
+                                    data-action="toggle_rooming_lock"
+                                    data-id="<?php echo $d['id']; ?>"
+                                    data-title="<?php echo !empty($d['rooming_locked']) ? 'Unlock Accommodation Editing' : 'Lock Accommodation Editing'; ?>"
+                                    data-message="<?php echo htmlspecialchars(!empty($d['rooming_locked']) ? 'This country will be able to create bookings and manage room assignments again. Existing booking edits and removals remain admin-only.' : 'This country can still view bookings and room assignments, but cannot create bookings or change assignments.', ENT_QUOTES); ?>"
+                                    data-button-class="<?php echo !empty($d['rooming_locked']) ? 'btn-success' : 'btn-danger'; ?>"
+                                    data-button-label="<?php echo !empty($d['rooming_locked']) ? 'Unlock Editing' : 'Lock Editing'; ?>"
+                                    title="<?php echo !empty($d['rooming_locked']) ? 'Unlock accommodation editing' : 'Lock accommodation editing'; ?>"
+                                >
+                                    <i class="bi <?php echo !empty($d['rooming_locked']) ? 'bi-unlock' : 'bi-lock'; ?>"></i>
                                 </button>
                                 <button
                                     type="button"

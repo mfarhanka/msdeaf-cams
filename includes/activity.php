@@ -77,6 +77,14 @@ function recordActivity(
 
 function getActorDetailsFromSession(): array
 {
+    if (isset($_SESSION['impersonator_admin']) && is_array($_SESSION['impersonator_admin'])) {
+        return [
+            'id' => isset($_SESSION['impersonator_admin']['id']) ? (int) $_SESSION['impersonator_admin']['id'] : null,
+            'role' => 'admin',
+            'username' => isset($_SESSION['impersonator_admin']['username']) ? (string) $_SESSION['impersonator_admin']['username'] : null,
+        ];
+    }
+
     return [
         'id' => isset($_SESSION['id']) ? (int) $_SESSION['id'] : null,
         'role' => isset($_SESSION['role']) ? (string) $_SESSION['role'] : null,

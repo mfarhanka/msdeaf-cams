@@ -41,6 +41,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $error = "Your account has been suspended. Please contact the system administrator.";
                 } else {
                 // Password matches, start user session
+                    session_regenerate_id(true);
+                    unset($_SESSION['impersonator_admin'], $_SESSION['delegation_impersonation_csrf'], $_SESSION['impersonation_return_csrf']);
                     $_SESSION['loggedin'] = true;
                     $_SESSION['id'] = $row['id'];
                     $_SESSION['username'] = $row['username'];
