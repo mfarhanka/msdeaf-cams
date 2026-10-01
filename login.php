@@ -260,6 +260,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             </button>
                         </div>
                     </form>
+
+                    <div class="text-center mt-3">
+                        <a href="delegate_login.php" class="text-decoration-none">
+                            <i class="bi bi-person-vcard me-1"></i>Delegate login with IC / passport
+                        </a>
+                    </div>
                     
                     <div class="text-center mt-4">
                         <small class="text-muted">Need help logging in? <br>Contact the <b>System Administrator</b>.</small>

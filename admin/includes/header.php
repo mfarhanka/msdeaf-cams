@@ -186,6 +186,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <a class="nav-link w-100 text-start <?php echo $current_page == 'championship_participants.php' ? 'active' : ''; ?>" href="championship_participants.php"><i class="bi bi-person-lines-fill me-2"></i>Championship Participants<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'hotels.php' ? 'active' : ''; ?>" href="hotels.php"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'invoices.php' ? 'active' : ''; ?>" href="invoices.php"><i class="bi bi-receipt me-2"></i>Invoices</a>
+            <a class="nav-link w-100 text-start <?php echo $current_page == 'claims.php' ? 'active' : ''; ?>" href="claims.php"><i class="bi bi-cash-coin me-2"></i>Expense Claims</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'delegations.php' ? 'active' : ''; ?>" href="delegations.php"><i class="bi bi-globe me-2"></i>Delegations</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php"><i class="bi bi-megaphone me-2"></i>Announcements</a>
             <a class="nav-link w-100 text-start <?php echo $current_page == 'volunteers.php' ? 'active' : ''; ?>" href="volunteers.php"><i class="bi bi-people me-2"></i>Volunteers<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>
@@ -217,6 +218,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'championship_participants.php' ? 'active' : ''; ?>" href="championship_participants.php"><i class="bi bi-person-lines-fill me-2"></i>Championship Participants<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'hotels.php' ? 'active' : ''; ?>" href="hotels.php"><i class="bi bi-hospital me-2"></i>Hotels & Pricing</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'invoices.php' ? 'active' : ''; ?>" href="invoices.php"><i class="bi bi-receipt me-2"></i>Invoices</a>
+                    <a class="nav-link w-100 text-start <?php echo $current_page == 'claims.php' ? 'active' : ''; ?>" href="claims.php"><i class="bi bi-cash-coin me-2"></i>Expense Claims</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'delegations.php' ? 'active' : ''; ?>" href="delegations.php"><i class="bi bi-globe me-2"></i>Delegations</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php"><i class="bi bi-megaphone me-2"></i>Announcements</a>
                     <a class="nav-link w-100 text-start <?php echo $current_page == 'volunteers.php' ? 'active' : ''; ?>" href="volunteers.php"><i class="bi bi-people me-2"></i>Volunteers<span class="badge rounded-pill text-bg-danger ms-2">NEW</span></a>

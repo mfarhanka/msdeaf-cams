@@ -39,8 +39,8 @@ require_once 'includes/header.php';
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                     <div>
-                        <h5 class="card-title mb-1">Update Passport Numbers</h5>
-                        <p class="text-muted small mb-0">Enter or revise the passport number for each athlete, then save the full list.</p>
+                        <h5 class="card-title mb-1">Update IC / Passport Numbers</h5>
+                        <p class="text-muted small mb-0">Enter each delegate's IC or passport number. This number is also used for delegate self-service login.</p>
                     </div>
                 </div>
 
@@ -54,7 +54,7 @@ require_once 'includes/header.php';
                                     <tr>
                                         <th>Name</th>
                                         <th>Gender</th>
-                                        <th style="width: 280px;">Passport Number</th>
+                                        <th style="width: 280px;">IC / Passport Number</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -68,7 +68,7 @@ require_once 'includes/header.php';
                                                     name="passport_numbers[<?php echo $athlete['id']; ?>]"
                                                     class="form-control form-control-sm"
                                                     value="<?php echo htmlspecialchars($athlete['passport_number'] ?? ''); ?>"
-                                                    placeholder="Enter passport number"
+                                                    placeholder="Enter IC or passport number"
                                                     maxlength="255"
                                                 >
                                             </td>
