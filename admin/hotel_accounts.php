@@ -104,6 +104,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $actor['id'], $actor['role'], $actor['username']);
             $msg = '<div class="alert alert-success">Hotel account ' . htmlspecialchars($newStatus) . '.</div>';
         }
+    } elseif ($action === 'remove_hotel_account') {
+        $csrfToken = (string) ($_POST['csrf_token'] ?? '');
+
+        if (!hash_equals((string) $_SESSION['hotel_impersonation_csrf'], $csrfToken)) {
+            $msg = '<div class="alert alert-danger">The removal request expired. Please try again.</div>';
+        } elseif ($accountId <= 0) {
+            $msg = '<div class="alert alert-warning">Invalid hotel account.</div>';
+        } else {
+            $stmt = $pdo->prepare("SELECT u.username, u.hotel_id, h.name AS hotel_name
+                FROM users u LEFT JOIN hotels h ON h.id = u.hotel_id
+                WHERE u.id = ? AND u.role = 'hotel' LIMIT 1");
+            $stmt->execute([$accountId]);
+            $account = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$account) {
+                $msg = '<div class="alert alert-warning">Hotel account not found or already removed.</div>';
+            } else {
+                $deleteStmt = $pdo->prepare("DELETE FROM users WHERE id = ? AND role = 'hotel'");
+                $deleteStmt->execute([$accountId]);
+
+                if ($deleteStmt->rowCount() === 1) {
+                    recordActivity($pdo, 'hotel_account_removed', 'user', $accountId,
+                        'Hotel portal access removed by administrator.', [
+                            'username' => $account['username'],
+                            'hotel_id' => (int) ($account['hotel_id'] ?? 0),
+                            'hotel_name' => $account['hotel_name'],
+                        ], $actor['id'], $actor['role'], $actor['username']);
+                    $msg = '<div class="alert alert-success">Hotel access removed for ' . htmlspecialchars($account['username']) . '.</div>';
+                } else {
+                    $msg = '<div class="alert alert-danger">Unable to remove the hotel account.</div>';
+                }
+            }
+        }
     }
 }
 
@@ -154,6 +187,12 @@ require_once __DIR__ . '/includes/header.php';
                 <?php endif; ?>
                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editAccount<?php echo (int) $account['id']; ?>"><i class="bi bi-pencil"></i></button>
                 <form method="post"><input type="hidden" name="action" value="toggle_hotel_account"><input type="hidden" name="id" value="<?php echo (int) $account['id']; ?>"><button class="btn btn-sm btn-outline-<?php echo $account['status'] === 'active' ? 'warning' : 'success'; ?>"><?php echo $account['status'] === 'active' ? 'Suspend' : 'Activate'; ?></button></form>
+                <form method="post" onsubmit="return confirm('Permanently remove hotel access for <?php echo htmlspecialchars(addslashes($account['username']), ENT_QUOTES); ?>? The hotel, bookings, and room data will remain.');">
+                    <input type="hidden" name="action" value="remove_hotel_account">
+                    <input type="hidden" name="id" value="<?php echo (int) $account['id']; ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['hotel_impersonation_csrf']); ?>">
+                    <button class="btn btn-sm btn-outline-danger" type="submit" title="Remove hotel access"><i class="bi bi-trash me-1"></i>Remove</button>
+                </form>
             </td>
         </tr>
     <?php endforeach; ?>
