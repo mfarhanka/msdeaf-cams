@@ -230,6 +230,12 @@ function ensureHotelPortalSchema(PDO $pdo): void
         if (!in_array('hotel_id', $columns, true)) {
             $pdo->exec("ALTER TABLE users ADD COLUMN hotel_id INT NULL AFTER country_name");
         }
+        if (!in_array('hotel_contact_name', $columns, true)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN hotel_contact_name VARCHAR(150) NULL AFTER hotel_id");
+        }
+        if (!in_array('hotel_whatsapp', $columns, true)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN hotel_whatsapp VARCHAR(30) NULL AFTER hotel_contact_name");
+        }
     } catch (PDOException $exception) {
         error_log('Hotel portal column migration failed: ' . $exception->getMessage());
     }

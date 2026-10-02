@@ -1,7 +1,24 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
 
+ensureHotelPortalSchema($pdo);
+
 $actor = getActorDetailsFromSession();
+
+function hotelWhatsAppDigits(string $number): string
+{
+    $digits = preg_replace('/\D+/', '', $number) ?? '';
+
+    if (str_starts_with($digits, '00')) {
+        return substr($digits, 2);
+    }
+
+    if (str_starts_with($digits, '0')) {
+        return '60' . substr($digits, 1);
+    }
+
+    return $digits;
+}
 
 if (empty($_SESSION['hotel_impersonation_csrf'])) {
     $_SESSION['hotel_impersonation_csrf'] = bin2hex(random_bytes(32));
@@ -55,34 +72,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     } elseif ($action === 'save_hotel_account') {
         $username = trim((string) ($_POST['username'] ?? ''));
         $password = (string) ($_POST['password'] ?? '');
+        $contactName = trim((string) ($_POST['hotel_contact_name'] ?? ''));
+        $whatsApp = trim((string) ($_POST['hotel_whatsapp'] ?? ''));
+        $whatsAppDigits = hotelWhatsAppDigits($whatsApp);
         $hotelId = (int) ($_POST['hotel_id'] ?? 0);
         $hotelStmt = $pdo->prepare('SELECT name FROM hotels WHERE id = ?');
         $hotelStmt->execute([$hotelId]);
         $hotelName = $hotelStmt->fetchColumn();
 
-        if ($username === '' || $hotelId <= 0 || !$hotelName || ($accountId === 0 && $password === '')) {
-            $msg = '<div class="alert alert-warning">Hotel, username, and a password for new accounts are required.</div>';
+        if ($username === '' || $contactName === '' || $whatsApp === '' || $hotelId <= 0 || !$hotelName || ($accountId === 0 && $password === '')) {
+            $msg = '<div class="alert alert-warning">Hotel, username, person in charge, WhatsApp number, and a password for new accounts are required.</div>';
+        } elseif (strlen($whatsAppDigits) < 8 || strlen($whatsAppDigits) > 15) {
+            $msg = '<div class="alert alert-warning">Enter a valid WhatsApp number, including its country code when outside Malaysia.</div>';
         } else {
             try {
                 if ($accountId > 0) {
                     if ($password !== '') {
-                        $stmt = $pdo->prepare("UPDATE users SET username = ?, password = ?, hotel_id = ? WHERE id = ? AND role = 'hotel'");
-                        $stmt->execute([$username, password_hash($password, PASSWORD_DEFAULT), $hotelId, $accountId]);
+                        $stmt = $pdo->prepare("UPDATE users SET username = ?, password = ?, hotel_id = ?, hotel_contact_name = ?, hotel_whatsapp = ? WHERE id = ? AND role = 'hotel'");
+                        $stmt->execute([$username, password_hash($password, PASSWORD_DEFAULT), $hotelId, $contactName, $whatsApp, $accountId]);
                     } else {
-                        $stmt = $pdo->prepare("UPDATE users SET username = ?, hotel_id = ? WHERE id = ? AND role = 'hotel'");
-                        $stmt->execute([$username, $hotelId, $accountId]);
+                        $stmt = $pdo->prepare("UPDATE users SET username = ?, hotel_id = ?, hotel_contact_name = ?, hotel_whatsapp = ? WHERE id = ? AND role = 'hotel'");
+                        $stmt->execute([$username, $hotelId, $contactName, $whatsApp, $accountId]);
                     }
                     $activityAction = 'hotel_account_updated';
                     $message = 'Hotel account updated.';
                 } else {
-                    $stmt = $pdo->prepare("INSERT INTO users (username, password, role, status, hotel_id) VALUES (?, ?, 'hotel', 'active', ?)");
-                    $stmt->execute([$username, password_hash($password, PASSWORD_DEFAULT), $hotelId]);
+                    $stmt = $pdo->prepare("INSERT INTO users (username, password, role, status, hotel_id, hotel_contact_name, hotel_whatsapp) VALUES (?, ?, 'hotel', 'active', ?, ?, ?)");
+                    $stmt->execute([$username, password_hash($password, PASSWORD_DEFAULT), $hotelId, $contactName, $whatsApp]);
                     $accountId = (int) $pdo->lastInsertId();
                     $activityAction = 'hotel_account_created';
                     $message = 'Hotel account created.';
                 }
                 recordActivity($pdo, $activityAction, 'user', $accountId, $message,
-                    ['username' => $username, 'hotel_id' => $hotelId, 'hotel_name' => $hotelName, 'password_changed' => $password !== ''],
+                    ['username' => $username, 'hotel_id' => $hotelId, 'hotel_name' => $hotelName, 'contact_name' => $contactName, 'whatsapp' => $whatsApp, 'password_changed' => $password !== ''],
                     $actor['id'], $actor['role'], $actor['username']);
                 $msg = '<div class="alert alert-success">' . htmlspecialchars($message) . '</div>';
             } catch (PDOException $exception) {
@@ -141,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 $hotels = $pdo->query('SELECT id, name FROM hotels ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
-$accounts = $pdo->query("SELECT u.id, u.username, u.status, u.hotel_id, u.created_at, h.name AS hotel_name
+$accounts = $pdo->query("SELECT u.id, u.username, u.status, u.hotel_id, u.hotel_contact_name, u.hotel_whatsapp, u.created_at, h.name AS hotel_name
     FROM users u LEFT JOIN hotels h ON h.id = u.hotel_id WHERE u.role = 'hotel' ORDER BY h.name, u.username")
     ->fetchAll(PDO::FETCH_ASSOC);
 
@@ -156,7 +178,7 @@ require_once __DIR__ . '/includes/header.php';
     <div class="alert alert-info">No hotel login accounts have been created yet.</div>
 <?php else: ?>
 <div class="card shadow-sm"><div class="card-body"><div class="table-responsive">
-    <table class="table align-middle mb-0"><thead><tr><th>Hotel</th><th>Username</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>
+    <table class="table align-middle mb-0"><thead><tr><th>Hotel</th><th>Person in Charge</th><th>Username</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>
     <?php foreach ($accounts as $account): ?>
         <tr>
             <td class="fw-semibold">
@@ -171,6 +193,21 @@ require_once __DIR__ . '/includes/header.php';
                     </form>
                 <?php else: ?>
                     <?php echo htmlspecialchars($account['hotel_name'] ?? 'Hotel removed'); ?>
+                <?php endif; ?>
+            </td>
+            <td>
+                <?php if (trim((string) ($account['hotel_contact_name'] ?? '')) !== ''): ?>
+                    <div class="fw-semibold"><?php echo htmlspecialchars($account['hotel_contact_name']); ?></div>
+                <?php else: ?>
+                    <div class="text-muted">Not set</div>
+                <?php endif; ?>
+                <?php $whatsAppDigits = hotelWhatsAppDigits((string) ($account['hotel_whatsapp'] ?? '')); ?>
+                <?php if ($whatsAppDigits !== ''): ?>
+                    <a class="btn btn-sm btn-success mt-1" href="https://wa.me/<?php echo htmlspecialchars($whatsAppDigits); ?>" target="_blank" rel="noopener noreferrer" title="Open WhatsApp chat">
+                        <i class="bi bi-whatsapp me-1"></i><?php echo htmlspecialchars($account['hotel_whatsapp']); ?>
+                    </a>
+                <?php else: ?>
+                    <div class="small text-muted">No WhatsApp number</div>
                 <?php endif; ?>
             </td>
             <td><?php echo htmlspecialchars($account['username']); ?></td>
@@ -201,7 +238,7 @@ require_once __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <?php
-$modalAccounts = array_merge([['id' => 0, 'username' => '', 'hotel_id' => 0]], $accounts);
+$modalAccounts = array_merge([['id' => 0, 'username' => '', 'hotel_id' => 0, 'hotel_contact_name' => '', 'hotel_whatsapp' => '']], $accounts);
 foreach ($modalAccounts as $account):
     $isNew = (int) $account['id'] === 0;
     $modalId = $isNew ? 'accountModal' : 'editAccount' . (int) $account['id'];
@@ -211,6 +248,8 @@ foreach ($modalAccounts as $account):
     <div class="modal-body">
         <input type="hidden" name="action" value="save_hotel_account"><input type="hidden" name="id" value="<?php echo (int) $account['id']; ?>">
         <div class="mb-3"><label class="form-label">Hotel</label><select class="form-select" name="hotel_id" required><option value="">Choose hotel</option><?php foreach ($hotels as $hotel): ?><option value="<?php echo (int) $hotel['id']; ?>" <?php echo (int) $account['hotel_id'] === (int) $hotel['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($hotel['name']); ?></option><?php endforeach; ?></select></div>
+        <div class="mb-3"><label class="form-label">Person in Charge</label><input class="form-control" name="hotel_contact_name" maxlength="150" value="<?php echo htmlspecialchars((string) ($account['hotel_contact_name'] ?? '')); ?>" required></div>
+        <div class="mb-3"><label class="form-label">WhatsApp Number</label><input class="form-control" type="tel" name="hotel_whatsapp" maxlength="30" value="<?php echo htmlspecialchars((string) ($account['hotel_whatsapp'] ?? '')); ?>" placeholder="e.g. +60 12-345 6789" required><div class="form-text">Malaysian numbers may start with 0 or +60.</div></div>
         <div class="mb-3"><label class="form-label">Username</label><input class="form-control" name="username" maxlength="50" value="<?php echo htmlspecialchars($account['username']); ?>" required></div>
         <div><label class="form-label">Password</label><input class="form-control" type="password" name="password" <?php echo $isNew ? 'required' : ''; ?>><div class="form-text"><?php echo $isNew ? 'Set the initial password.' : 'Leave blank to keep the current password.'; ?></div></div>
     </div>
