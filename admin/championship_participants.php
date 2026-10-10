@@ -1,5 +1,8 @@
 <?php
 require_once 'includes/auth.php';
+require_once '../includes/participant_subtypes.php';
+
+ensureParticipantSubtypeSchema($pdo);
 
 $championships = $pdo->query(
     "SELECT id, title, start_date, end_date, location
@@ -31,11 +34,13 @@ if ($selectedChampionshipId > 0) {
             a.last_name,
             a.gender,
             a.participant_type,
+            ps.name AS participant_subtype_name,
             u.country_name
          FROM room_assignments ra
          JOIN athletes a ON a.id = ra.athlete_id
          JOIN bookings b ON b.id = ra.booking_id
          JOIN users u ON u.id = a.country_id
+         LEFT JOIN participant_subtypes ps ON ps.id = a.participant_subtype_id AND ps.country_id = a.country_id
          WHERE b.championship_id = ?
            AND b.status <> 'Cancelled'
            AND b.country_id = a.country_id
@@ -69,6 +74,7 @@ require_once 'includes/header.php';
         <h1 class="h2 mb-1">Participants by Championship</h1>
         <p class="text-muted mb-0">View athletes and officials assigned to each championship.</p>
     </div>
+    <a class="btn btn-outline-success" href="certificate_participants.php"><i class="bi bi-award me-1"></i>Certificates by Country</a>
 </div>
 
 <?php if ($championships === []): ?>
@@ -121,7 +127,7 @@ require_once 'includes/header.php';
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
-                            <tr><th>#</th><th>Participant</th><th>Country</th><th>Type</th><th>Gender</th></tr>
+                            <tr><th>#</th><th>Participant</th><th>Country</th><th>Type</th><th>Gender</th><th class="text-end">Certificate</th></tr>
                         </thead>
                         <tbody>
                             <?php foreach ($participants as $index => $participant): ?>
@@ -137,6 +143,7 @@ require_once 'includes/header.php';
                                         <?php endif; ?>
                                     </td>
                                     <td><?php echo htmlspecialchars($participant['gender']); ?></td>
+                                    <td class="text-end"><a class="btn btn-sm btn-outline-success" href="participant_certificate.php?id=<?php echo (int) $participant['id']; ?>" target="_blank" rel="noopener"><i class="bi bi-printer me-1"></i>Print</a></td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
